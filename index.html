@@ -54,20 +54,20 @@ canvas {
   const WORLDS = [
     {
       name: 'Jungle', icon: '\u{1F33F}',
-      bg: '#0a1f0a', gridColor: 'rgba(30,80,30,0.15)',
-      palette: ['#2d5a1e','#4a8c2a','#7bc142','#a8e06c'],
-      ballColors: ['#3a7a1a','#5cb030','#2d5a1e'],
-      trailColor: [60, 180, 60],
-      starColors: ['#6db33f','#8fd460','#a8e06c'],
-      starShape: 'leaf',
-      trapShape: 'thorn',
-      trapColor: '#8b4513',
-      particleType: 'firefly',
-      particleColor: [180, 255, 80],
+      bg: '#0d2b0d', gridColor: 'rgba(30,80,30,0.10)',
+      palette: ['#0d2b0d','#1a4a1a','#2d6b2d','#4a8c4a'],
+      ballColors: ['#8B5E3C','#6B3F1F','#5A3015'],
+      trailColor: [100, 70, 40],
+      starColors: ['#FFD700','#FF8C00','#32CD32'],
+      starShape: 'fruit',
+      trapShape: 'jungleCreature',
+      trapColor: '#2d8b2d',
+      particleType: 'fallingLeaf',
+      particleColor: [80, 160, 40],
       friction: 0.985,
       accelMult: 1.0,
       musicBase: 220, musicScale: [0,2,4,5,7,9,11],
-      collectibleName: 'Leaf'
+      collectibleName: 'Fruit'
     },
     {
       name: 'Desert', icon: '\u{1F3DC}\uFE0F',
@@ -205,6 +205,13 @@ canvas {
   let traps = [];
   let effects = [];
   let ambientParticles = [];
+
+  // Speed boosts (jungle vine powerup)
+  let speedBoosts = [];
+  let speedBoostTimer = 0;
+  const SPEED_BOOST_DURATION = 3;
+  const SPEED_BOOST_MULT = 1.8;
+  const SPEED_BOOST_RADIUS = 18;
 
   // UI scroll
   let scrollY = 0;
@@ -496,7 +503,8 @@ canvas {
       x, y, spawnTime: performance.now(), phase: Math.random() * Math.PI * 2,
       moving: moving || false,
       vx: moving ? (Math.random() - 0.5) * 60 : 0,
-      vy: moving ? (Math.random() - 0.5) * 60 : 0
+      vy: moving ? (Math.random() - 0.5) * 60 : 0,
+      fruitType: Math.floor(Math.random() * 3) // 0=banana, 1=mango, 2=pineapple
     });
   }
 
@@ -517,7 +525,8 @@ canvas {
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
       phase: Math.random() * Math.PI * 2,
-      size: TRAP_RADIUS + Math.random() * 4
+      size: TRAP_RADIUS + Math.random() * 4,
+      creatureType: Math.floor(Math.random() * 3) // 0=snake, 1=crocodile, 2=spider
     });
   }
 
@@ -532,12 +541,35 @@ canvas {
         vx: (Math.random() - 0.5) * 20,
         vy: WORLDS[worldIdx].particleType === 'rain' ? 100 + Math.random() * 100 :
             WORLDS[worldIdx].particleType === 'bubble' ? -(10 + Math.random() * 20) :
+            WORLDS[worldIdx].particleType === 'fallingLeaf' ? 15 + Math.random() * 25 :
             (Math.random() - 0.5) * 15,
         size: 1 + Math.random() * 3,
         phase: Math.random() * Math.PI * 2,
         alpha: 0.2 + Math.random() * 0.5
       });
     }
+  }
+
+  // ========== SPEED BOOST SPAWN ==========
+  function spawnSpeedBoost() {
+    const pad = 60;
+    let x, y;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      x = pad + Math.random() * (W - pad * 2);
+      y = pad + Math.random() * (H - pad * 2);
+      const dx = x - ball.x, dy = y - ball.y;
+      if (Math.sqrt(dx * dx + dy * dy) < 100) continue;
+      let valid = true;
+      for (const t of traps) {
+        const tdx = x - t.x, tdy = y - t.y;
+        if (Math.sqrt(tdx * tdx + tdy * tdy) < 60) { valid = false; break; }
+      }
+      if (valid) break;
+    }
+    speedBoosts.push({
+      x, y, phase: Math.random() * Math.PI * 2,
+      spawnTime: performance.now()
+    });
   }
 
   // ========== START LEVEL ==========
@@ -562,6 +594,8 @@ canvas {
     stars = [];
     traps = [];
     effects = [];
+    speedBoosts = [];
+    speedBoostTimer = 0;
     tiltX = 0;
     tiltY = 0;
 
@@ -570,6 +604,10 @@ canvas {
     }
     for (let i = 0; i < cfg.trapCount; i++) {
       spawnTrap(cfg.trapSpeed);
+    }
+    // Spawn speed boost for jungle
+    if (worldIdx === 0) {
+      spawnSpeedBoost();
     }
     spawnAmbientParticles(worldIdx);
 
@@ -638,7 +676,8 @@ canvas {
 
     // Physics
     const friction = cfg.slippery ? Math.min(0.998, w.friction + 0.005) : w.friction;
-    const accelScale = 800 * w.accelMult;
+    const boostMult = speedBoostTimer > 0 ? SPEED_BOOST_MULT : 1;
+    const accelScale = 800 * w.accelMult * boostMult;
 
     ball.vx += tiltX * TILT_SENSITIVITY * accelScale * dt;
     ball.vy += tiltY * TILT_SENSITIVITY * accelScale * dt;
@@ -725,6 +764,21 @@ canvas {
       }
     }
 
+    // Speed boost collision & timer
+    if (speedBoostTimer > 0) speedBoostTimer -= dt;
+    for (let i = speedBoosts.length - 1; i >= 0; i--) {
+      const sb = speedBoosts[i];
+      const dx2 = ball.x - sb.x, dy2 = ball.y - sb.y;
+      if (Math.sqrt(dx2 * dx2 + dy2 * dy2) < BALL_RADIUS + SPEED_BOOST_RADIUS) {
+        speedBoostTimer = SPEED_BOOST_DURATION;
+        speedBoosts.splice(i, 1);
+        effects.push({ type: 'ring', x: sb.x, y: sb.y, t: 0, maxT: 0.5 });
+        effects.push({ type: 'score', x: sb.x, y: sb.y - 10, t: 0, maxT: 0.8, text: 'SPEED!' });
+        // Respawn after a delay via timeout-like mechanism
+        setTimeout(() => { if (state === 'playing' && currentWorld === 0) spawnSpeedBoost(); }, 8000);
+      }
+    }
+
     // Ambient particles
     for (const p of ambientParticles) {
       p.x += p.vx * dt;
@@ -733,6 +787,9 @@ canvas {
       if (w.particleType === 'firefly') {
         p.x += Math.sin(p.phase) * 15 * dt;
         p.y += Math.cos(p.phase * 0.7) * 10 * dt;
+      }
+      if (w.particleType === 'fallingLeaf') {
+        p.x += Math.sin(p.phase * 0.5) * 20 * dt;
       }
       // Wrap
       if (p.x < -10) p.x = W + 10;
@@ -749,6 +806,71 @@ canvas {
   }
 
   // ========== DRAW HELPERS ==========
+  function drawJungleBackground() {
+    // Deep green gradient
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0d2b0d');
+    bg.addColorStop(1, '#1a4a1a');
+    ctx.fillStyle = bg;
+    ctx.fillRect(-10, -10, W + 20, H + 20);
+
+    // Tree silhouettes on edges
+    ctx.fillStyle = 'rgba(0,15,0,0.6)';
+    // Left trees
+    for (let i = 0; i < 4; i++) {
+      const tx = 10 + i * 12;
+      const ty = H;
+      const th = H * (0.4 + i * 0.12);
+      // Trunk
+      ctx.fillRect(tx - 3, ty - th, 6, th);
+      // Canopy (triangle)
+      ctx.beginPath();
+      ctx.moveTo(tx, ty - th - 30);
+      ctx.lineTo(tx - 20 - i * 5, ty - th + 20);
+      ctx.lineTo(tx + 20 + i * 5, ty - th + 20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(tx, ty - th - 10);
+      ctx.lineTo(tx - 25 - i * 4, ty - th + 40);
+      ctx.lineTo(tx + 25 + i * 4, ty - th + 40);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Right trees
+    for (let i = 0; i < 4; i++) {
+      const tx = W - 10 - i * 12;
+      const ty = H;
+      const th = H * (0.35 + i * 0.13);
+      ctx.fillRect(tx - 3, ty - th, 6, th);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty - th - 30);
+      ctx.lineTo(tx - 20 - i * 5, ty - th + 20);
+      ctx.lineTo(tx + 20 + i * 5, ty - th + 20);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(tx, ty - th - 10);
+      ctx.lineTo(tx - 25 - i * 4, ty - th + 40);
+      ctx.lineTo(tx + 25 + i * 4, ty - th + 40);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Hanging vines from top
+    ctx.strokeStyle = 'rgba(30,80,20,0.3)';
+    ctx.lineWidth = 2;
+    const time = performance.now() / 1000;
+    for (let i = 0; i < 8; i++) {
+      const vx = 20 + i * (W - 40) / 7;
+      const vlen = 40 + Math.sin(i * 1.7) * 25;
+      ctx.beginPath();
+      ctx.moveTo(vx, 0);
+      ctx.quadraticCurveTo(vx + Math.sin(time + i) * 8, vlen * 0.5, vx + Math.sin(time * 0.7 + i) * 5, vlen);
+      ctx.stroke();
+    }
+  }
+
   function drawGrid(color) {
     ctx.strokeStyle = color || 'rgba(50,70,120,0.12)';
     ctx.lineWidth = 1;
@@ -772,7 +894,7 @@ canvas {
   }
 
   // ========== DRAW THEMED SHAPES ==========
-  function drawThemedStar(x, y, r, worldIdx, phase) {
+  function drawThemedStar(x, y, r, worldIdx, phase, fruitType) {
     const w = WORLDS[worldIdx];
     const sg = ctx.createRadialGradient(x, y, 0, x, y, r);
     sg.addColorStop(0, w.starColors[0]);
@@ -784,6 +906,92 @@ canvas {
     ctx.shadowBlur = 15 + 5 * Math.sin(phase);
 
     switch (w.starShape) {
+      case 'fruit': {
+        const ft = (typeof fruitType === 'number') ? fruitType : 0;
+        if (ft === 0) {
+          // Banana - curved yellow shape
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(0.3);
+          ctx.beginPath();
+          ctx.moveTo(-r * 0.1, -r * 0.8);
+          ctx.quadraticCurveTo(-r * 0.8, -r * 0.2, -r * 0.6, r * 0.6);
+          ctx.quadraticCurveTo(-r * 0.3, r * 0.9, 0, r * 0.7);
+          ctx.quadraticCurveTo(r * 0.2, r * 0.5, r * 0.1, -r * 0.1);
+          ctx.quadraticCurveTo(r * 0.05, -r * 0.6, -r * 0.1, -r * 0.8);
+          ctx.closePath();
+          const bg = ctx.createLinearGradient(-r * 0.5, 0, r * 0.3, 0);
+          bg.addColorStop(0, '#e6c619');
+          bg.addColorStop(0.5, '#FFD700');
+          bg.addColorStop(1, '#f0e060');
+          ctx.fillStyle = bg;
+          ctx.fill();
+          // Banana tip
+          ctx.beginPath();
+          ctx.arc(-r * 0.15, -r * 0.75, r * 0.12, 0, Math.PI * 2);
+          ctx.fillStyle = '#8B6914';
+          ctx.fill();
+          ctx.restore();
+        } else if (ft === 1) {
+          // Mango - oval orange-red shape
+          ctx.beginPath();
+          ctx.ellipse(x, y, r * 0.6, r * 0.85, 0.2, 0, Math.PI * 2);
+          const mg = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, 0, x, y, r);
+          mg.addColorStop(0, '#FF6347');
+          mg.addColorStop(0.4, '#FF8C00');
+          mg.addColorStop(1, '#FFA500');
+          ctx.fillStyle = mg;
+          ctx.fill();
+          // Stem
+          ctx.beginPath();
+          ctx.moveTo(x + r * 0.3, y - r * 0.75);
+          ctx.lineTo(x + r * 0.4, y - r * 0.95);
+          ctx.strokeStyle = '#5a8a30';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          // Small leaf at stem
+          ctx.beginPath();
+          ctx.ellipse(x + r * 0.45, y - r * 0.9, r * 0.2, r * 0.08, -0.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#3a7a1a';
+          ctx.fill();
+        } else {
+          // Pineapple - yellow rectangle body + green crown
+          ctx.save();
+          ctx.translate(x, y);
+          // Body
+          ctx.beginPath();
+          ctx.ellipse(0, r * 0.15, r * 0.55, r * 0.7, 0, 0, Math.PI * 2);
+          const pg = ctx.createLinearGradient(0, -r * 0.5, 0, r * 0.8);
+          pg.addColorStop(0, '#DAA520');
+          pg.addColorStop(0.5, '#FFD700');
+          pg.addColorStop(1, '#CC8400');
+          ctx.fillStyle = pg;
+          ctx.fill();
+          // Cross-hatch pattern
+          ctx.strokeStyle = 'rgba(139,90,10,0.4)';
+          ctx.lineWidth = 0.7;
+          for (let i = -2; i <= 2; i++) {
+            ctx.beginPath();
+            ctx.moveTo(-r * 0.5, i * r * 0.25);
+            ctx.lineTo(r * 0.5, i * r * 0.25 + r * 0.15);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-r * 0.5, i * r * 0.25 + r * 0.15);
+            ctx.lineTo(r * 0.5, i * r * 0.25);
+            ctx.stroke();
+          }
+          // Green crown leaves
+          ctx.fillStyle = '#228B22';
+          for (let i = -2; i <= 2; i++) {
+            ctx.beginPath();
+            ctx.ellipse(i * r * 0.15, -r * 0.7, r * 0.08, r * 0.3, i * 0.15, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+        break;
+      }
+
       case 'leaf':
         ctx.beginPath();
         ctx.ellipse(x, y, r * 0.5, r, phase * 0.3, 0, Math.PI * 2);
@@ -868,22 +1076,147 @@ canvas {
 
     switch (w.trapShape) {
       case 'thorn':
-        // Thorny vine ball
+        // Thorny vine ball (legacy fallback)
         ctx.fillStyle = w.trapColor;
         ctx.beginPath();
         ctx.arc(0, 0, size * 0.6, 0, Math.PI * 2);
         ctx.fill();
-        for (let i = 0; i < 8; i++) {
-          const a = (i / 8) * Math.PI * 2;
+        break;
+
+      case 'jungleCreature': {
+        const ct = t.creatureType || 0;
+        if (ct === 0) {
+          // Snake - green segmented body in sine wave
+          ctx.rotate(-wobble); // undo wobble for snake, use sine wave instead
+          const segments = 8;
+          const segSize = size * 0.3;
+          ctx.fillStyle = '#2d8b2d';
+          for (let i = 0; i < segments; i++) {
+            const sx = (i - segments / 2) * segSize * 0.8;
+            const sy = Math.sin(time * 4 + i * 0.8 + phase) * size * 0.4;
+            ctx.beginPath();
+            ctx.arc(sx, sy, segSize * (i === 0 ? 0.5 : 0.38), 0, Math.PI * 2);
+            ctx.fillStyle = i === 0 ? '#1a6b1a' : (i % 2 === 0 ? '#2d8b2d' : '#3aad3a');
+            ctx.fill();
+          }
+          // Head details (first segment = head)
+          const hx = (-segments / 2) * segSize * 0.8;
+          const hy = Math.sin(time * 4 + phase) * size * 0.4;
+          // Eyes
+          ctx.fillStyle = '#ff0';
           ctx.beginPath();
-          ctx.moveTo(Math.cos(a) * size * 0.4, Math.sin(a) * size * 0.4);
-          ctx.lineTo(Math.cos(a) * size, Math.sin(a) * size);
-          ctx.lineTo(Math.cos(a + 0.3) * size * 0.5, Math.sin(a + 0.3) * size * 0.5);
-          ctx.closePath();
-          ctx.fillStyle = '#5a2d0a';
+          ctx.arc(hx - 2, hy - 3, 2, 0, Math.PI * 2);
+          ctx.arc(hx + 2, hy - 3, 2, 0, Math.PI * 2);
           ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath();
+          ctx.arc(hx - 2, hy - 3, 1, 0, Math.PI * 2);
+          ctx.arc(hx + 2, hy - 3, 1, 0, Math.PI * 2);
+          ctx.fill();
+          // Tongue
+          ctx.strokeStyle = '#cc0000';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(hx, hy + segSize * 0.4);
+          ctx.lineTo(hx - 3, hy + segSize * 0.7);
+          ctx.moveTo(hx, hy + segSize * 0.4);
+          ctx.lineTo(hx + 3, hy + segSize * 0.7);
+          ctx.stroke();
+        } else if (ct === 1) {
+          // Crocodile - long green rectangle with teeth zigzag
+          ctx.fillStyle = '#3a6b2a';
+          // Body
+          ctx.beginPath();
+          ctx.roundRect(-size * 1.1, -size * 0.25, size * 2.2, size * 0.5, 4);
+          ctx.fill();
+          // Darker top
+          ctx.fillStyle = '#2a5a1a';
+          ctx.beginPath();
+          ctx.roundRect(-size * 1.0, -size * 0.25, size * 2.0, size * 0.2, 3);
+          ctx.fill();
+          // Teeth zigzag (jaw)
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          const jawX = -size * 1.1;
+          for (let i = 0; i < 6; i++) {
+            const tx2 = jawX - size * 0.1 + i * size * 0.08;
+            ctx.moveTo(tx2, -size * 0.05);
+            ctx.lineTo(tx2 + size * 0.04, size * 0.1);
+            ctx.lineTo(tx2 + size * 0.08, -size * 0.05);
+          }
+          ctx.fill();
+          // Eye
+          ctx.fillStyle = '#ff0';
+          ctx.beginPath();
+          ctx.arc(-size * 0.7, -size * 0.15, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#000';
+          ctx.beginPath();
+          ctx.arc(-size * 0.7, -size * 0.15, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+          // Tail
+          ctx.strokeStyle = '#3a6b2a';
+          ctx.lineWidth = size * 0.3;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(size * 0.9, 0);
+          ctx.quadraticCurveTo(size * 1.3, Math.sin(time * 3 + phase) * size * 0.3, size * 1.4, 0);
+          ctx.stroke();
+          ctx.lineCap = 'butt';
+          // Bumps on back
+          ctx.fillStyle = '#2a5a1a';
+          for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.arc(-size * 0.5 + i * size * 0.35, -size * 0.28, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          // Spider - black circle with 8 thin legs
+          // Body
+          ctx.fillStyle = '#1a1a1a';
+          ctx.beginPath();
+          ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+          // Abdomen
+          ctx.beginPath();
+          ctx.arc(0, size * 0.3, size * 0.3, 0, Math.PI * 2);
+          ctx.fillStyle = '#222';
+          ctx.fill();
+          // Red marking on abdomen
+          ctx.fillStyle = '#cc0000';
+          ctx.beginPath();
+          ctx.arc(0, size * 0.3, size * 0.1, 0, Math.PI * 2);
+          ctx.fill();
+          // 8 legs
+          ctx.strokeStyle = '#1a1a1a';
+          ctx.lineWidth = 1.5;
+          for (let i = 0; i < 8; i++) {
+            const side = i < 4 ? -1 : 1;
+            const idx = i % 4;
+            const baseAngle = (idx * 0.4 + 0.3) * side;
+            const legLen = size * (0.8 + idx * 0.15);
+            const midX = Math.cos(baseAngle - Math.PI / 2) * size * 0.35;
+            const midY = Math.sin(baseAngle - Math.PI / 2) * size * 0.35;
+            const endX = Math.cos(baseAngle - Math.PI / 2 + side * 0.3) * legLen;
+            const endY = Math.sin(baseAngle - Math.PI / 2 + side * 0.3) * legLen;
+            const kneeX = (midX + endX) * 0.5 + side * size * 0.2;
+            const kneeY = (midY + endY) * 0.5 - size * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(midX, midY);
+            ctx.quadraticCurveTo(kneeX, kneeY, endX, endY);
+            ctx.stroke();
+          }
+          // Eyes (8 small dots)
+          ctx.fillStyle = '#ff0000';
+          for (let i = 0; i < 4; i++) {
+            const ex = -3 + i * 2;
+            ctx.beginPath();
+            ctx.arc(ex, -size * 0.3, 1, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
         break;
+      }
 
       case 'cactus':
         ctx.fillStyle = w.trapColor;
@@ -1021,13 +1354,28 @@ canvas {
 
     // World-specific ball decoration
     switch (worldIdx) {
-      case 0: // Jungle: vine pattern
-        ctx.strokeStyle = 'rgba(0,100,0,0.4)';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 3; i++) {
+      case 0: // Jungle: coconut
+        // Texture lines (fibrous coconut shell)
+        ctx.strokeStyle = 'rgba(60,30,10,0.5)';
+        ctx.lineWidth = 0.8;
+        for (let i = 0; i < 5; i++) {
+          const a = i * 1.2 + 0.3;
           ctx.beginPath();
-          ctx.arc(ball.x, ball.y, BALL_RADIUS * (0.4 + i * 0.2), 0.5 + i, 2 + i);
+          ctx.arc(ball.x, ball.y, BALL_RADIUS * (0.5 + i * 0.08), a, a + 1.5);
           ctx.stroke();
+        }
+        // Darker brown top (cap)
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y - BALL_RADIUS * 0.3, BALL_RADIUS * 0.5, Math.PI, Math.PI * 2);
+        ctx.fillStyle = 'rgba(50,25,5,0.45)';
+        ctx.fill();
+        // Three dots on top (coconut eyes)
+        ctx.fillStyle = 'rgba(40,20,5,0.6)';
+        for (let i = 0; i < 3; i++) {
+          const da = (i / 3) * Math.PI * 2 - Math.PI / 2;
+          ctx.beginPath();
+          ctx.arc(ball.x + Math.cos(da) * 4, ball.y - BALL_RADIUS * 0.3 + Math.sin(da) * 3, 1.5, 0, Math.PI * 2);
+          ctx.fill();
         }
         break;
       case 1: // Desert: sand texture dots
@@ -1080,6 +1428,18 @@ canvas {
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.fill();
 
+    // Speed boost glow ring
+    if (speedBoostTimer > 0) {
+      ctx.strokeStyle = `rgba(128,255,64,${0.4 + 0.3 * Math.sin(performance.now() / 100)})`;
+      ctx.lineWidth = 2;
+      ctx.shadowColor = '#80ff40';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, BALL_RADIUS + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
     ctx.globalAlpha = 1;
   }
 
@@ -1091,6 +1451,27 @@ canvas {
       ctx.globalAlpha = p.alpha * (0.5 + 0.5 * Math.sin(p.phase));
 
       switch (w.particleType) {
+        case 'fallingLeaf':
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(Math.sin(p.phase * 0.7) * 0.8);
+          // Leaf shape
+          const leafShade = Math.floor(p.phase * 3) % 3;
+          const leafColors = ['#3a8a20', '#6db33f', '#8B6914'];
+          ctx.fillStyle = leafColors[leafShade];
+          ctx.beginPath();
+          ctx.ellipse(0, 0, p.size * 2.5, p.size * 1.2, Math.sin(p.phase) * 0.3, 0, Math.PI * 2);
+          ctx.fill();
+          // Leaf vein
+          ctx.strokeStyle = 'rgba(0,50,0,0.3)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(-p.size * 2, 0);
+          ctx.lineTo(p.size * 2, 0);
+          ctx.stroke();
+          ctx.restore();
+          break;
+
         case 'firefly':
           ctx.fillStyle = `rgb(${pc[0]},${pc[1]},${pc[2]})`;
           ctx.shadowColor = `rgb(${pc[0]},${pc[1]},${pc[2]})`;
@@ -1139,6 +1520,73 @@ canvas {
     ctx.globalAlpha = 1;
   }
 
+  // ========== DRAW SPEED BOOST ==========
+  function drawSpeedBoost(sb, time) {
+    const { x, y } = sb;
+    const pulse = 1 + 0.1 * Math.sin(time * 3 + sb.phase);
+    const r = SPEED_BOOST_RADIUS * pulse;
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // Vine stem
+    ctx.strokeStyle = '#4a7a2a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.quadraticCurveTo(-r * 0.5, 0, 0, -r);
+    ctx.stroke();
+
+    // Secondary vine curl
+    ctx.strokeStyle = '#3a6a1a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.3);
+    ctx.quadraticCurveTo(r * 0.6, -r * 0.6, r * 0.3, -r * 0.9);
+    ctx.stroke();
+
+    // Glowing leaves
+    ctx.shadowColor = '#80ff40';
+    ctx.shadowBlur = 12 + 5 * Math.sin(time * 4 + sb.phase);
+
+    const leafPositions = [
+      { lx: -r * 0.3, ly: -r * 0.5, a: -0.4 },
+      { lx: r * 0.2, ly: -r * 0.2, a: 0.3 },
+      { lx: -r * 0.1, ly: r * 0.3, a: -0.2 },
+      { lx: r * 0.35, ly: -r * 0.7, a: 0.5 }
+    ];
+
+    for (const lp of leafPositions) {
+      ctx.save();
+      ctx.translate(lp.lx, lp.ly);
+      ctx.rotate(lp.a + Math.sin(time * 2 + sb.phase) * 0.15);
+      ctx.fillStyle = '#60d030';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r * 0.25, r * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Leaf vein
+      ctx.strokeStyle = 'rgba(0,80,0,0.4)';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.2, 0);
+      ctx.lineTo(r * 0.2, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Center glow orb
+    ctx.beginPath();
+    ctx.arc(0, -r * 0.1, r * 0.2, 0, Math.PI * 2);
+    const gg = ctx.createRadialGradient(0, -r * 0.1, 0, 0, -r * 0.1, r * 0.25);
+    gg.addColorStop(0, 'rgba(180,255,80,0.9)');
+    gg.addColorStop(1, 'rgba(80,200,40,0)');
+    ctx.fillStyle = gg;
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
   // ========== DRAW HUD ==========
   function drawHUD() {
     const w = WORLDS[currentWorld];
@@ -1183,25 +1631,64 @@ canvas {
     const barW = W - 32;
     const pct = Math.max(0, timeLeft / GAME_TIME);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.beginPath();
-    ctx.roundRect(16, barY, barW, barH, 3);
-    ctx.fill();
+    if (currentWorld === 0) {
+      // Jungle: brown vine timer bar
+      ctx.fillStyle = 'rgba(60,30,10,0.3)';
+      ctx.beginPath();
+      ctx.roundRect(16, barY, barW, barH, 3);
+      ctx.fill();
 
-    let barColor;
-    if (pct > 0.5) barColor = '#4fc3f7';
-    else if (pct > 0.2) barColor = '#ffd700';
-    else barColor = '#ff5722';
-    ctx.fillStyle = barColor;
-    ctx.beginPath();
-    ctx.roundRect(16, barY, barW * pct, barH, 3);
-    ctx.fill();
+      // Vine fill
+      const vineW = barW * pct;
+      if (vineW > 2) {
+        const vg = ctx.createLinearGradient(16, barY, 16 + vineW, barY);
+        vg.addColorStop(0, '#5a3015');
+        vg.addColorStop(0.5, '#8B5E3C');
+        vg.addColorStop(1, pct > 0.2 ? '#6B3F1F' : '#cc3300');
+        ctx.fillStyle = vg;
+        ctx.beginPath();
+        ctx.roundRect(16, barY, vineW, barH, 3);
+        ctx.fill();
+
+        // Small leaf buds along vine
+        ctx.fillStyle = '#4a8a2a';
+        const leafCount = Math.floor(vineW / 40);
+        for (let i = 0; i < leafCount; i++) {
+          const lx = 16 + (i + 1) * vineW / (leafCount + 1);
+          ctx.beginPath();
+          ctx.ellipse(lx, barY - 1, 4, 2, -0.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.beginPath();
+      ctx.roundRect(16, barY, barW, barH, 3);
+      ctx.fill();
+
+      let barColor;
+      if (pct > 0.5) barColor = '#4fc3f7';
+      else if (pct > 0.2) barColor = '#ffd700';
+      else barColor = '#ff5722';
+      ctx.fillStyle = barColor;
+      ctx.beginPath();
+      ctx.roundRect(16, barY, barW * pct, barH, 3);
+      ctx.fill();
+    }
 
     // Time text
     ctx.font = '400 11px Orbitron';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.fillStyle = currentWorld === 0 ? 'rgba(200,180,140,0.7)' : 'rgba(255,255,255,0.5)';
     ctx.textAlign = 'center';
     ctx.fillText(Math.ceil(timeLeft) + 's', W / 2, barY - 14);
+
+    // Speed boost active indicator
+    if (speedBoostTimer > 0) {
+      ctx.font = '700 12px Orbitron';
+      ctx.fillStyle = `rgba(128,255,64,${0.6 + 0.4 * Math.sin(performance.now() / 150)})`;
+      ctx.textAlign = 'center';
+      ctx.fillText('SPEED BOOST!', W / 2, barY - 28);
+    }
   }
 
   function drawEffects() {
@@ -1544,8 +2031,12 @@ canvas {
     }
 
     // Background
-    ctx.fillStyle = w.bg;
-    ctx.fillRect(-10, -10, W + 20, H + 20);
+    if (currentWorld === 0) {
+      drawJungleBackground();
+    } else {
+      ctx.fillStyle = w.bg;
+      ctx.fillRect(-10, -10, W + 20, H + 20);
+    }
     drawGrid(w.gridColor);
 
     // Ambient particles
@@ -1556,11 +2047,16 @@ canvas {
       drawThemedTrap(t, currentWorld, time);
     }
 
+    // Speed boosts
+    for (const sb of speedBoosts) {
+      drawSpeedBoost(sb, time);
+    }
+
     // Stars
     for (const s of stars) {
       const elapsed = (performance.now() - s.spawnTime) / 1000;
       const pulse = 1 + 0.1 * Math.sin(elapsed * 3 + s.phase);
-      drawThemedStar(s.x, s.y, STAR_RADIUS * pulse, currentWorld, elapsed * 3 + s.phase);
+      drawThemedStar(s.x, s.y, STAR_RADIUS * pulse, currentWorld, elapsed * 3 + s.phase, s.fruitType);
     }
 
     // Ball
