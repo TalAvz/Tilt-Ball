@@ -533,20 +533,72 @@ canvas {
   // ========== PARTICLES ==========
   function spawnAmbientParticles(worldIdx) {
     ambientParticles = [];
-    const count = 30;
-    for (let i = 0; i < count; i++) {
-      ambientParticles.push({
-        x: Math.random() * W,
-        y: Math.random() * H,
-        vx: (Math.random() - 0.5) * 20,
-        vy: WORLDS[worldIdx].particleType === 'rain' ? 100 + Math.random() * 100 :
-            WORLDS[worldIdx].particleType === 'bubble' ? -(10 + Math.random() * 20) :
-            WORLDS[worldIdx].particleType === 'fallingLeaf' ? 15 + Math.random() * 25 :
-            (Math.random() - 0.5) * 15,
-        size: 1 + Math.random() * 3,
-        phase: Math.random() * Math.PI * 2,
-        alpha: 0.2 + Math.random() * 0.5
-      });
+    if (worldIdx === 0) {
+      // Jungle: multiple particle types - leaves, fireflies, pollen, mist
+      // Falling leaves (12)
+      for (let i = 0; i < 12; i++) {
+        ambientParticles.push({
+          x: Math.random() * W, y: Math.random() * H,
+          vx: (Math.random() - 0.5) * 15,
+          vy: 12 + Math.random() * 20,
+          size: 2 + Math.random() * 3,
+          phase: Math.random() * Math.PI * 2,
+          alpha: 0.3 + Math.random() * 0.4,
+          subtype: 'leaf',
+          colorIdx: Math.floor(Math.random() * 4)
+        });
+      }
+      // Fireflies (10)
+      for (let i = 0; i < 10; i++) {
+        ambientParticles.push({
+          x: Math.random() * W, y: Math.random() * H,
+          vx: (Math.random() - 0.5) * 8,
+          vy: (Math.random() - 0.5) * 8,
+          size: 1.5 + Math.random() * 1.5,
+          phase: Math.random() * Math.PI * 2,
+          alpha: 0.4 + Math.random() * 0.5,
+          subtype: 'firefly'
+        });
+      }
+      // Floating pollen (10)
+      for (let i = 0; i < 10; i++) {
+        ambientParticles.push({
+          x: Math.random() * W, y: H * 0.4 + Math.random() * H * 0.6,
+          vx: (Math.random() - 0.5) * 5,
+          vy: -(3 + Math.random() * 5),
+          size: 0.8 + Math.random() * 1,
+          phase: Math.random() * Math.PI * 2,
+          alpha: 0.2 + Math.random() * 0.3,
+          subtype: 'pollen'
+        });
+      }
+      // Mist patches near ground (4)
+      for (let i = 0; i < 4; i++) {
+        ambientParticles.push({
+          x: Math.random() * W, y: H * 0.82 + Math.random() * H * 0.12,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 1,
+          size: 40 + Math.random() * 30,
+          phase: Math.random() * Math.PI * 2,
+          alpha: 0.04 + Math.random() * 0.03,
+          subtype: 'mist'
+        });
+      }
+    } else {
+      const count = 30;
+      for (let i = 0; i < count; i++) {
+        ambientParticles.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          vx: (Math.random() - 0.5) * 20,
+          vy: WORLDS[worldIdx].particleType === 'rain' ? 100 + Math.random() * 100 :
+              WORLDS[worldIdx].particleType === 'bubble' ? -(10 + Math.random() * 20) :
+              (Math.random() - 0.5) * 15,
+          size: 1 + Math.random() * 3,
+          phase: Math.random() * Math.PI * 2,
+          alpha: 0.2 + Math.random() * 0.5
+        });
+      }
     }
   }
 
@@ -784,12 +836,25 @@ canvas {
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.phase += dt * 2;
-      if (w.particleType === 'firefly') {
-        p.x += Math.sin(p.phase) * 15 * dt;
-        p.y += Math.cos(p.phase * 0.7) * 10 * dt;
-      }
-      if (w.particleType === 'fallingLeaf') {
-        p.x += Math.sin(p.phase * 0.5) * 20 * dt;
+      // Jungle subtype-specific movement
+      if (p.subtype === 'firefly') {
+        p.x += Math.sin(p.phase * 1.3) * 18 * dt;
+        p.y += Math.cos(p.phase * 0.9) * 12 * dt;
+      } else if (p.subtype === 'leaf') {
+        p.x += Math.sin(p.phase * 0.5) * 25 * dt;
+      } else if (p.subtype === 'pollen') {
+        p.x += Math.sin(p.phase * 0.8) * 8 * dt;
+      } else if (p.subtype === 'mist') {
+        // Mist stays near ground level
+        if (p.y < H * 0.75) p.y = H * 0.85;
+      } else {
+        if (w.particleType === 'firefly') {
+          p.x += Math.sin(p.phase) * 15 * dt;
+          p.y += Math.cos(p.phase * 0.7) * 10 * dt;
+        }
+        if (w.particleType === 'fallingLeaf') {
+          p.x += Math.sin(p.phase * 0.5) * 20 * dt;
+        }
       }
       // Wrap
       if (p.x < -10) p.x = W + 10;
@@ -807,68 +872,270 @@ canvas {
 
   // ========== DRAW HELPERS ==========
   function drawJungleBackground() {
-    // Deep green gradient
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#0d2b0d');
-    bg.addColorStop(1, '#1a4a1a');
-    ctx.fillStyle = bg;
+    const time = performance.now() / 1000;
+
+    // === LAYER 1: Sky / Canopy (top 25%) ===
+    // Dark emerald to deep green gradient
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+    skyGrad.addColorStop(0, '#041a04');
+    skyGrad.addColorStop(0.15, '#0a2e0a');
+    skyGrad.addColorStop(0.4, '#0d3a0d');
+    skyGrad.addColorStop(0.7, '#123d12');
+    skyGrad.addColorStop(1, '#1a4a1a');
+    ctx.fillStyle = skyGrad;
     ctx.fillRect(-10, -10, W + 20, H + 20);
 
-    // Tree silhouettes on edges
-    ctx.fillStyle = 'rgba(0,15,0,0.6)';
-    // Left trees
-    for (let i = 0; i < 4; i++) {
-      const tx = 10 + i * 12;
-      const ty = H;
-      const th = H * (0.4 + i * 0.12);
-      // Trunk
-      ctx.fillRect(tx - 3, ty - th, 6, th);
-      // Canopy (triangle)
+    // Dappled sunlight effect - soft yellow circles
+    const sunSpots = [
+      { x: W * 0.15, y: H * 0.08, r: 60 },
+      { x: W * 0.45, y: H * 0.12, r: 80 },
+      { x: W * 0.75, y: H * 0.06, r: 55 },
+      { x: W * 0.3, y: H * 0.22, r: 45 },
+      { x: W * 0.65, y: H * 0.18, r: 65 },
+      { x: W * 0.9, y: H * 0.15, r: 50 }
+    ];
+    for (const sp of sunSpots) {
+      const pulse = 1 + 0.15 * Math.sin(time * 0.5 + sp.x * 0.01);
+      const sg = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, sp.r * pulse);
+      sg.addColorStop(0, 'rgba(255,240,120,0.08)');
+      sg.addColorStop(0.5, 'rgba(200,220,80,0.04)');
+      sg.addColorStop(1, 'rgba(100,150,50,0)');
+      ctx.fillStyle = sg;
       ctx.beginPath();
-      ctx.moveTo(tx, ty - th - 30);
-      ctx.lineTo(tx - 20 - i * 5, ty - th + 20);
-      ctx.lineTo(tx + 20 + i * 5, ty - th + 20);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(tx, ty - th - 10);
-      ctx.lineTo(tx - 25 - i * 4, ty - th + 40);
-      ctx.lineTo(tx + 25 + i * 4, ty - th + 40);
-      ctx.closePath();
-      ctx.fill();
-    }
-    // Right trees
-    for (let i = 0; i < 4; i++) {
-      const tx = W - 10 - i * 12;
-      const ty = H;
-      const th = H * (0.35 + i * 0.13);
-      ctx.fillRect(tx - 3, ty - th, 6, th);
-      ctx.beginPath();
-      ctx.moveTo(tx, ty - th - 30);
-      ctx.lineTo(tx - 20 - i * 5, ty - th + 20);
-      ctx.lineTo(tx + 20 + i * 5, ty - th + 20);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(tx, ty - th - 10);
-      ctx.lineTo(tx - 25 - i * 4, ty - th + 40);
-      ctx.lineTo(tx + 25 + i * 4, ty - th + 40);
-      ctx.closePath();
+      ctx.arc(sp.x, sp.y, sp.r * pulse, 0, Math.PI * 2);
       ctx.fill();
     }
 
+    // Large tropical canopy leaves along top edge
+    function drawCanopyLeaf(lx, ly, leafW, leafH, angle, shade) {
+      ctx.save();
+      ctx.translate(lx, ly);
+      ctx.rotate(angle + Math.sin(time * 0.3 + lx * 0.01) * 0.03);
+      // Leaf body
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.bezierCurveTo(leafW * 0.3, -leafH * 0.4, leafW * 0.8, -leafH * 0.3, leafW, -leafH * 0.1);
+      ctx.bezierCurveTo(leafW * 0.9, leafH * 0.2, leafW * 0.4, leafH * 0.3, 0, 0);
+      ctx.fillStyle = shade;
+      ctx.fill();
+      // Leaf vein (central)
+      ctx.strokeStyle = 'rgba(0,40,0,0.3)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(leafW * 0.5, -leafH * 0.05, leafW * 0.9, -leafH * 0.05);
+      ctx.stroke();
+      // Side veins
+      ctx.lineWidth = 0.6;
+      ctx.strokeStyle = 'rgba(0,40,0,0.2)';
+      for (let v = 1; v <= 4; v++) {
+        const vx = leafW * v * 0.2;
+        const vy = -leafH * 0.05 * v * 0.15;
+        ctx.beginPath();
+        ctx.moveTo(vx, vy);
+        ctx.lineTo(vx + leafW * 0.12, vy - leafH * 0.15);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(vx, vy);
+        ctx.lineTo(vx + leafW * 0.1, vy + leafH * 0.12);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Top canopy leaves - layered
+    const canopyLeaves = [
+      { x: -20, y: -5, w: 120, h: 60, a: 0.2, c: 'rgba(10,60,10,0.9)' },
+      { x: W * 0.12, y: -10, w: 140, h: 70, a: -0.1, c: 'rgba(15,70,15,0.85)' },
+      { x: W * 0.3, y: -8, w: 110, h: 55, a: 0.3, c: 'rgba(20,55,10,0.9)' },
+      { x: W * 0.48, y: -12, w: 130, h: 65, a: -0.2, c: 'rgba(12,65,12,0.88)' },
+      { x: W * 0.65, y: -5, w: 120, h: 58, a: 0.15, c: 'rgba(18,50,12,0.92)' },
+      { x: W * 0.8, y: -8, w: 140, h: 68, a: -0.25, c: 'rgba(10,60,10,0.87)' },
+      { x: W - 40, y: -3, w: 100, h: 50, a: 0.1, c: 'rgba(15,55,10,0.9)' },
+      // Second layer (lighter, overlapping)
+      { x: W * 0.08, y: 5, w: 100, h: 50, a: 0.35, c: 'rgba(25,80,20,0.7)' },
+      { x: W * 0.35, y: 8, w: 90, h: 45, a: -0.3, c: 'rgba(30,85,25,0.65)' },
+      { x: W * 0.55, y: 3, w: 110, h: 52, a: 0.2, c: 'rgba(22,75,18,0.72)' },
+      { x: W * 0.78, y: 6, w: 95, h: 48, a: -0.15, c: 'rgba(28,70,22,0.68)' }
+    ];
+    for (const cl of canopyLeaves) {
+      drawCanopyLeaf(cl.x, cl.y, cl.w, cl.h, cl.a, cl.c);
+    }
+
+    // === LAYER 2: Mid jungle - Tree trunks and vines ===
+
+    // Draw tropical tree trunks on left and right edges
+    function drawTreeTrunk(tx, trunkW, trunkH, leavesRight) {
+      // Trunk body - cylindrical with highlight
+      const tg = ctx.createLinearGradient(tx - trunkW / 2, 0, tx + trunkW / 2, 0);
+      tg.addColorStop(0, '#3d2510');
+      tg.addColorStop(0.3, '#6b4226');
+      tg.addColorStop(0.5, '#7a5030');
+      tg.addColorStop(0.7, '#6b4226');
+      tg.addColorStop(1, '#2d1a08');
+      ctx.fillStyle = tg;
+      ctx.beginPath();
+      ctx.roundRect(tx - trunkW / 2, H - trunkH, trunkW, trunkH + 10, [3, 3, 0, 0]);
+      ctx.fill();
+
+      // Moss patches on trunk
+      ctx.fillStyle = 'rgba(30,70,15,0.4)';
+      for (let m = 0; m < 4; m++) {
+        const my = H - trunkH + m * trunkH * 0.25 + Math.sin(m * 2.1) * 10;
+        const mx = tx + (Math.sin(m * 3.7) * trunkW * 0.2);
+        ctx.beginPath();
+        ctx.ellipse(mx, my, trunkW * 0.3 + Math.sin(m) * 3, 6 + Math.sin(m * 1.3) * 3, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Large exotic leaves branching out
+      const leafDir = leavesRight ? 1 : -1;
+      const trunkLeaves = [
+        { y: H - trunkH * 0.9, len: 50, ang: leafDir * 0.5 },
+        { y: H - trunkH * 0.7, len: 65, ang: leafDir * 0.3 },
+        { y: H - trunkH * 0.5, len: 55, ang: leafDir * 0.7 },
+        { y: H - trunkH * 0.3, len: 45, ang: leafDir * 0.4 }
+      ];
+      for (const tl of trunkLeaves) {
+        ctx.save();
+        ctx.translate(tx, tl.y);
+        ctx.rotate(tl.ang);
+        // Leaf shape
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.bezierCurveTo(tl.len * 0.3, -12, tl.len * 0.7, -8, tl.len, -2);
+        ctx.bezierCurveTo(tl.len * 0.7, 8, tl.len * 0.3, 10, 0, 0);
+        ctx.fillStyle = `rgba(${20 + Math.random() * 20},${60 + Math.random() * 30},${10 + Math.random() * 15},0.7)`;
+        ctx.fill();
+        // Central vein
+        ctx.strokeStyle = 'rgba(0,40,0,0.3)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(tl.len * 0.9, -1);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Left trunks
+    drawTreeTrunk(18, 28, H * 0.7, true);
+    drawTreeTrunk(50, 22, H * 0.55, true);
+    // Right trunks
+    drawTreeTrunk(W - 18, 28, H * 0.65, false);
+    drawTreeTrunk(W - 48, 20, H * 0.5, false);
+
     // Hanging vines from top
-    ctx.strokeStyle = 'rgba(30,80,20,0.3)';
-    ctx.lineWidth = 2;
-    const time = performance.now() / 1000;
-    for (let i = 0; i < 8; i++) {
-      const vx = 20 + i * (W - 40) / 7;
-      const vlen = 40 + Math.sin(i * 1.7) * 25;
+    for (let i = 0; i < 12; i++) {
+      const vx = 30 + i * (W - 60) / 11;
+      const vlen = 50 + Math.sin(i * 1.7) * 40 + 20;
+      const sway = Math.sin(time * 0.6 + i * 1.3) * 10;
+      const sway2 = Math.sin(time * 0.4 + i * 2.1) * 6;
+      // Vine line
+      ctx.strokeStyle = i % 3 === 0 ? 'rgba(50,30,10,0.35)' : 'rgba(25,65,15,0.3)';
+      ctx.lineWidth = 1.5 + (i % 2);
       ctx.beginPath();
       ctx.moveTo(vx, 0);
-      ctx.quadraticCurveTo(vx + Math.sin(time + i) * 8, vlen * 0.5, vx + Math.sin(time * 0.7 + i) * 5, vlen);
+      ctx.bezierCurveTo(
+        vx + sway, vlen * 0.3,
+        vx + sway2, vlen * 0.6,
+        vx + sway * 0.7, vlen
+      );
       ctx.stroke();
+      // Small leaves on some vines
+      if (i % 2 === 0) {
+        const leafY = vlen * 0.6;
+        const leafX = vx + sway * 0.5;
+        ctx.fillStyle = 'rgba(30,80,20,0.4)';
+        ctx.save();
+        ctx.translate(leafX, leafY);
+        ctx.rotate(Math.sin(time + i) * 0.2);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 8, 4, 0.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
     }
+
+    // === LAYER 3: Ground ===
+    // Dark soil ground with texture (bottom 15%)
+    const groundH = H * 0.15;
+    const groundY = H - groundH;
+    const groundGrad = ctx.createLinearGradient(0, groundY, 0, H);
+    groundGrad.addColorStop(0, '#1a1208');
+    groundGrad.addColorStop(0.3, '#14100a');
+    groundGrad.addColorStop(1, '#0d0a06');
+    ctx.fillStyle = groundGrad;
+    ctx.beginPath();
+    // Irregular top edge for ground
+    ctx.moveTo(-10, H + 10);
+    ctx.lineTo(-10, groundY + 8);
+    for (let gx = 0; gx <= W; gx += 20) {
+      ctx.lineTo(gx, groundY + Math.sin(gx * 0.05 + 1.5) * 6 + Math.sin(gx * 0.12) * 3);
+    }
+    ctx.lineTo(W + 10, H + 10);
+    ctx.closePath();
+    ctx.fill();
+
+    // Ground texture - small roots, dirt specks
+    ctx.fillStyle = 'rgba(40,28,12,0.4)';
+    for (let i = 0; i < 15; i++) {
+      const rx = (i * 67 + 23) % W;
+      const ry = groundY + 10 + (i * 31 % Math.floor(groundH - 15));
+      ctx.beginPath();
+      ctx.ellipse(rx, ry, 3 + (i % 3), 1.5, i * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Grass tufts
+    ctx.strokeStyle = 'rgba(30,70,15,0.5)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 20; i++) {
+      const gx = (i * 53 + 10) % W;
+      const gy = groundY + Math.sin(gx * 0.05 + 1.5) * 6;
+      for (let b = -1; b <= 1; b++) {
+        ctx.beginPath();
+        ctx.moveTo(gx + b * 2, gy);
+        ctx.quadraticCurveTo(gx + b * 4 + Math.sin(time + i) * 2, gy - 10 - Math.abs(b) * 3, gx + b * 6, gy - 14);
+        ctx.stroke();
+      }
+    }
+
+    // Fallen leaves on ground
+    const fallenColors = ['rgba(90,60,10,0.3)', 'rgba(60,80,15,0.25)', 'rgba(100,70,20,0.2)'];
+    for (let i = 0; i < 8; i++) {
+      const fx = (i * 89 + 40) % W;
+      const fy = groundY + 5 + (i * 17 % 15);
+      ctx.fillStyle = fallenColors[i % 3];
+      ctx.beginPath();
+      ctx.ellipse(fx, fy, 5, 2.5, i * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Mist/fog at ground level
+    for (let i = 0; i < 4; i++) {
+      const mx = (i * W / 4 + Math.sin(time * 0.15 + i) * 30) % W;
+      const mistGrad = ctx.createRadialGradient(mx, groundY, 0, mx, groundY, 80 + i * 15);
+      mistGrad.addColorStop(0, 'rgba(180,200,180,0.06)');
+      mistGrad.addColorStop(0.5, 'rgba(150,180,150,0.03)');
+      mistGrad.addColorStop(1, 'rgba(100,140,100,0)');
+      ctx.fillStyle = mistGrad;
+      ctx.beginPath();
+      ctx.ellipse(mx, groundY + 5, 100 + i * 20, 25, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Torch/flashlight lighting overlay for jungle
+  function drawJungleLighting() {
+    // Dark vignette with bright spot around ball
+    const lg = ctx.createRadialGradient(ball.x, ball.y, 40, ball.x, ball.y, 220);
+    lg.addColorStop(0, 'rgba(0,0,0,0)');
+    lg.addColorStop(0.4, 'rgba(0,0,0,0.05)');
+    lg.addColorStop(0.7, 'rgba(0,10,0,0.15)');
+    lg.addColorStop(1, 'rgba(0,5,0,0.3)');
+    ctx.fillStyle = lg;
+    ctx.fillRect(-10, -10, W + 20, H + 20);
   }
 
   function drawGrid(color) {
@@ -896,7 +1163,11 @@ canvas {
   // ========== DRAW THEMED SHAPES ==========
   function drawThemedStar(x, y, r, worldIdx, phase, fruitType) {
     const w = WORLDS[worldIdx];
-    const sg = ctx.createRadialGradient(x, y, 0, x, y, r);
+    // Jungle fruits are much larger
+    const drawR = worldIdx === 0 ? Math.max(r, 24) : r;
+    const time = performance.now() / 1000;
+
+    const sg = ctx.createRadialGradient(x, y, 0, x, y, drawR);
     sg.addColorStop(0, w.starColors[0]);
     sg.addColorStop(0.6, w.starColors[1]);
     sg.addColorStop(1, w.starColors[2]);
@@ -905,88 +1176,203 @@ canvas {
     ctx.shadowColor = w.starColors[0];
     ctx.shadowBlur = 15 + 5 * Math.sin(phase);
 
+    // Gentle bob animation for jungle fruits
+    let bobY = 0;
+    if (worldIdx === 0) {
+      bobY = Math.sin(time * 2.5 + phase) * 3;
+    }
+
     switch (w.starShape) {
       case 'fruit': {
         const ft = (typeof fruitType === 'number') ? fruitType : 0;
+        const fy = y + bobY;
+
+        // Drop shadow for all fruits
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.beginPath();
+        ctx.ellipse(x + 2, fy + drawR * 0.6, drawR * 0.5, drawR * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Warm glow underneath
+        const glowGrad = ctx.createRadialGradient(x, fy + drawR * 0.3, 0, x, fy + drawR * 0.3, drawR * 0.8);
         if (ft === 0) {
-          // Banana - curved yellow shape
+          glowGrad.addColorStop(0, 'rgba(255,220,50,0.12)');
+        } else if (ft === 1) {
+          glowGrad.addColorStop(0, 'rgba(255,140,50,0.12)');
+        } else {
+          glowGrad.addColorStop(0, 'rgba(255,200,50,0.12)');
+        }
+        glowGrad.addColorStop(1, 'rgba(255,200,50,0)');
+        ctx.fillStyle = glowGrad;
+        ctx.beginPath();
+        ctx.arc(x, fy + drawR * 0.3, drawR * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (ft === 0) {
+          // BANANA - curved crescent shape
           ctx.save();
-          ctx.translate(x, y);
+          ctx.translate(x, fy);
           ctx.rotate(0.3);
+          // Main curved crescent body
           ctx.beginPath();
-          ctx.moveTo(-r * 0.1, -r * 0.8);
-          ctx.quadraticCurveTo(-r * 0.8, -r * 0.2, -r * 0.6, r * 0.6);
-          ctx.quadraticCurveTo(-r * 0.3, r * 0.9, 0, r * 0.7);
-          ctx.quadraticCurveTo(r * 0.2, r * 0.5, r * 0.1, -r * 0.1);
-          ctx.quadraticCurveTo(r * 0.05, -r * 0.6, -r * 0.1, -r * 0.8);
+          ctx.moveTo(-drawR * 0.05, -drawR * 0.85);
+          ctx.bezierCurveTo(-drawR * 0.7, -drawR * 0.5, -drawR * 0.85, drawR * 0.1, -drawR * 0.6, drawR * 0.65);
+          ctx.bezierCurveTo(-drawR * 0.4, drawR * 0.85, -drawR * 0.1, drawR * 0.8, drawR * 0.05, drawR * 0.6);
+          ctx.bezierCurveTo(drawR * 0.15, drawR * 0.35, drawR * 0.2, -drawR * 0.1, drawR * 0.1, -drawR * 0.4);
+          ctx.bezierCurveTo(drawR * 0.05, -drawR * 0.65, 0, -drawR * 0.8, -drawR * 0.05, -drawR * 0.85);
           ctx.closePath();
-          const bg = ctx.createLinearGradient(-r * 0.5, 0, r * 0.3, 0);
-          bg.addColorStop(0, '#e6c619');
-          bg.addColorStop(0.5, '#FFD700');
-          bg.addColorStop(1, '#f0e060');
+          const bg = ctx.createLinearGradient(-drawR * 0.6, 0, drawR * 0.15, 0);
+          bg.addColorStop(0, '#c8a810');
+          bg.addColorStop(0.2, '#e6c619');
+          bg.addColorStop(0.5, '#FFE135');
+          bg.addColorStop(0.8, '#FFD700');
+          bg.addColorStop(1, '#c8a810');
           ctx.fillStyle = bg;
           ctx.fill();
-          // Banana tip
+          // Darker edges
+          ctx.strokeStyle = 'rgba(150,120,20,0.3)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          // Brown tip top
           ctx.beginPath();
-          ctx.arc(-r * 0.15, -r * 0.75, r * 0.12, 0, Math.PI * 2);
-          ctx.fillStyle = '#8B6914';
+          ctx.ellipse(-drawR * 0.05, -drawR * 0.82, drawR * 0.08, drawR * 0.06, 0.3, 0, Math.PI * 2);
+          ctx.fillStyle = '#5a4010';
           ctx.fill();
+          // Brown tip bottom
+          ctx.beginPath();
+          ctx.ellipse(-drawR * 0.55, drawR * 0.65, drawR * 0.06, drawR * 0.05, -0.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#5a4010';
+          ctx.fill();
+          // Subtle center highlight
+          ctx.strokeStyle = 'rgba(255,255,200,0.15)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.bezierCurveTo(-drawR * 0.3, -drawR * 0.2, -drawR * 0.4, drawR * 0.2, -drawR * 0.3, drawR * 0.4);
+          ctx.stroke();
           ctx.restore();
         } else if (ft === 1) {
-          // Mango - oval orange-red shape
+          // MANGO - plump oval with warm gradient
           ctx.beginPath();
-          ctx.ellipse(x, y, r * 0.6, r * 0.85, 0.2, 0, Math.PI * 2);
-          const mg = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, 0, x, y, r);
-          mg.addColorStop(0, '#FF6347');
-          mg.addColorStop(0.4, '#FF8C00');
-          mg.addColorStop(1, '#FFA500');
+          ctx.ellipse(x, fy, drawR * 0.65, drawR * 0.85, 0.15, 0, Math.PI * 2);
+          const mg = ctx.createRadialGradient(x - drawR * 0.25, fy - drawR * 0.25, 0, x, fy, drawR * 0.9);
+          mg.addColorStop(0, '#FF5040');
+          mg.addColorStop(0.3, '#FF6347');
+          mg.addColorStop(0.6, '#FF8C00');
+          mg.addColorStop(1, '#E08000');
           ctx.fillStyle = mg;
           ctx.fill();
-          // Stem
+          // Mango skin color variation
           ctx.beginPath();
-          ctx.moveTo(x + r * 0.3, y - r * 0.75);
-          ctx.lineTo(x + r * 0.4, y - r * 0.95);
-          ctx.strokeStyle = '#5a8a30';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          // Small leaf at stem
-          ctx.beginPath();
-          ctx.ellipse(x + r * 0.45, y - r * 0.9, r * 0.2, r * 0.08, -0.5, 0, Math.PI * 2);
-          ctx.fillStyle = '#3a7a1a';
+          ctx.ellipse(x + drawR * 0.15, fy + drawR * 0.2, drawR * 0.35, drawR * 0.45, 0.2, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,200,50,0.2)';
           ctx.fill();
-        } else {
-          // Pineapple - yellow rectangle body + green crown
+          // Shine highlight upper left
+          const mShine = ctx.createRadialGradient(x - drawR * 0.25, fy - drawR * 0.35, 0, x - drawR * 0.2, fy - drawR * 0.3, drawR * 0.3);
+          mShine.addColorStop(0, 'rgba(255,255,255,0.45)');
+          mShine.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = mShine;
+          ctx.beginPath();
+          ctx.ellipse(x - drawR * 0.2, fy - drawR * 0.3, drawR * 0.25, drawR * 0.18, -0.3, 0, Math.PI * 2);
+          ctx.fill();
+          // Green leaf stub on top
+          ctx.fillStyle = '#3a7a1a';
           ctx.save();
-          ctx.translate(x, y);
+          ctx.translate(x + drawR * 0.2, fy - drawR * 0.78);
+          ctx.rotate(-0.3);
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.bezierCurveTo(drawR * 0.15, -drawR * 0.12, drawR * 0.3, -drawR * 0.08, drawR * 0.35, drawR * 0.02);
+          ctx.bezierCurveTo(drawR * 0.2, drawR * 0.05, drawR * 0.08, drawR * 0.03, 0, 0);
+          ctx.fill();
+          ctx.restore();
+          // Stem
+          ctx.strokeStyle = '#5a4020';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(x + drawR * 0.15, fy - drawR * 0.75);
+          ctx.lineTo(x + drawR * 0.2, fy - drawR * 0.85);
+          ctx.stroke();
+        } else {
+          // PINEAPPLE - round body with diamond grid + spiky crown
+          ctx.save();
+          ctx.translate(x, fy);
           // Body
           ctx.beginPath();
-          ctx.ellipse(0, r * 0.15, r * 0.55, r * 0.7, 0, 0, Math.PI * 2);
-          const pg = ctx.createLinearGradient(0, -r * 0.5, 0, r * 0.8);
-          pg.addColorStop(0, '#DAA520');
-          pg.addColorStop(0.5, '#FFD700');
-          pg.addColorStop(1, '#CC8400');
+          ctx.ellipse(0, drawR * 0.1, drawR * 0.6, drawR * 0.7, 0, 0, Math.PI * 2);
+          const pg = ctx.createRadialGradient(-drawR * 0.15, -drawR * 0.1, 0, 0, drawR * 0.1, drawR * 0.7);
+          pg.addColorStop(0, '#FFE44D');
+          pg.addColorStop(0.4, '#FFD700');
+          pg.addColorStop(0.7, '#DAA520');
+          pg.addColorStop(1, '#B8860B');
           ctx.fillStyle = pg;
           ctx.fill();
-          // Cross-hatch pattern
-          ctx.strokeStyle = 'rgba(139,90,10,0.4)';
-          ctx.lineWidth = 0.7;
-          for (let i = -2; i <= 2; i++) {
+
+          // Diamond grid pattern
+          ctx.strokeStyle = 'rgba(139,80,10,0.45)';
+          ctx.lineWidth = 0.8;
+          // Diagonal lines one way
+          for (let i = -3; i <= 3; i++) {
             ctx.beginPath();
-            ctx.moveTo(-r * 0.5, i * r * 0.25);
-            ctx.lineTo(r * 0.5, i * r * 0.25 + r * 0.15);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(-r * 0.5, i * r * 0.25 + r * 0.15);
-            ctx.lineTo(r * 0.5, i * r * 0.25);
+            ctx.moveTo(i * drawR * 0.22 - drawR * 0.4, -drawR * 0.5);
+            ctx.lineTo(i * drawR * 0.22 + drawR * 0.15, drawR * 0.75);
             ctx.stroke();
           }
-          // Green crown leaves
-          ctx.fillStyle = '#228B22';
-          for (let i = -2; i <= 2; i++) {
+          // Diagonal lines other way
+          for (let i = -3; i <= 3; i++) {
             ctx.beginPath();
-            ctx.ellipse(i * r * 0.15, -r * 0.7, r * 0.08, r * 0.3, i * 0.15, 0, Math.PI * 2);
+            ctx.moveTo(i * drawR * 0.22 + drawR * 0.4, -drawR * 0.5);
+            ctx.lineTo(i * drawR * 0.22 - drawR * 0.15, drawR * 0.75);
+            ctx.stroke();
+          }
+          // Small dots at diamond intersections
+          ctx.fillStyle = 'rgba(120,70,10,0.25)';
+          for (let gy = -2; gy <= 2; gy++) {
+            for (let gx = -1; gx <= 1; gx++) {
+              ctx.beginPath();
+              ctx.arc(gx * drawR * 0.25, gy * drawR * 0.22 + drawR * 0.1, 1.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+
+          // Green spiky crown (5-6 pointed leaves)
+          const crownLeaves = [
+            { cx: 0, a: 0, h: drawR * 0.55 },
+            { cx: -drawR * 0.12, a: -0.25, h: drawR * 0.45 },
+            { cx: drawR * 0.12, a: 0.25, h: drawR * 0.45 },
+            { cx: -drawR * 0.22, a: -0.45, h: drawR * 0.35 },
+            { cx: drawR * 0.22, a: 0.45, h: drawR * 0.35 },
+            { cx: 0, a: 0.1, h: drawR * 0.5 }
+          ];
+          for (const cl of crownLeaves) {
+            ctx.save();
+            ctx.translate(cl.cx, -drawR * 0.58);
+            ctx.rotate(cl.a);
+            ctx.beginPath();
+            ctx.moveTo(-drawR * 0.06, 0);
+            ctx.bezierCurveTo(-drawR * 0.04, -cl.h * 0.4, drawR * 0.01, -cl.h * 0.7, 0, -cl.h);
+            ctx.bezierCurveTo(drawR * 0.02, -cl.h * 0.7, drawR * 0.06, -cl.h * 0.4, drawR * 0.06, 0);
+            ctx.closePath();
+            ctx.fillStyle = cl.h > drawR * 0.4 ? '#1a8a22' : '#228B22';
             ctx.fill();
+            // Leaf center line
+            ctx.strokeStyle = 'rgba(0,50,0,0.3)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, -cl.h * 0.9);
+            ctx.stroke();
+            ctx.restore();
           }
+
+          // Warm golden glow
+          const pGlow = ctx.createRadialGradient(0, drawR * 0.1, drawR * 0.3, 0, drawR * 0.1, drawR * 0.8);
+          pGlow.addColorStop(0, 'rgba(255,215,0,0)');
+          pGlow.addColorStop(1, 'rgba(255,200,50,0.08)');
+          ctx.fillStyle = pGlow;
+          ctx.beginPath();
+          ctx.arc(0, drawR * 0.1, drawR * 0.8, 0, Math.PI * 2);
+          ctx.fill();
+
           ctx.restore();
         }
         break;
@@ -1086,132 +1472,288 @@ canvas {
       case 'jungleCreature': {
         const ct = t.creatureType || 0;
         if (ct === 0) {
-          // Snake - green segmented body in sine wave
-          ctx.rotate(-wobble); // undo wobble for snake, use sine wave instead
-          const segments = 8;
-          const segSize = size * 0.3;
-          ctx.fillStyle = '#2d8b2d';
+          // SNAKE - thick body, diamond pattern, triangular head, forked tongue
+          ctx.rotate(-wobble);
+          const segments = 10;
+          const segW = size * 0.42;
+
+          // Compute snake positions along sine wave
+          const pts = [];
           for (let i = 0; i < segments; i++) {
-            const sx = (i - segments / 2) * segSize * 0.8;
-            const sy = Math.sin(time * 4 + i * 0.8 + phase) * size * 0.4;
+            pts.push({
+              x: (i - segments / 2) * segW * 0.75,
+              y: Math.sin(time * 3.5 + i * 0.7 + phase) * size * 0.45
+            });
+          }
+
+          // Draw body segments (thick, 8px style)
+          for (let i = segments - 1; i >= 1; i--) {
+            const s = pts[i];
+            const thickness = segW * (0.32 + 0.06 * Math.sin(i * 0.7));
+            // Base green body
             ctx.beginPath();
-            ctx.arc(sx, sy, segSize * (i === 0 ? 0.5 : 0.38), 0, Math.PI * 2);
-            ctx.fillStyle = i === 0 ? '#1a6b1a' : (i % 2 === 0 ? '#2d8b2d' : '#3aad3a');
+            ctx.arc(s.x, s.y, thickness, 0, Math.PI * 2);
+            ctx.fillStyle = i % 2 === 0 ? '#2a9a2a' : '#35b535';
+            ctx.fill();
+            // Darker diamond pattern on back
+            if (i % 2 === 0 && i > 0 && i < segments - 1) {
+              ctx.save();
+              ctx.translate(s.x, s.y);
+              const ang = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x);
+              ctx.rotate(ang);
+              ctx.beginPath();
+              ctx.moveTo(0, -thickness * 0.6);
+              ctx.lineTo(thickness * 0.5, 0);
+              ctx.lineTo(0, thickness * 0.6);
+              ctx.lineTo(-thickness * 0.5, 0);
+              ctx.closePath();
+              ctx.fillStyle = 'rgba(15,80,15,0.5)';
+              ctx.fill();
+              ctx.restore();
+            }
+          }
+
+          // Triangular head (first point)
+          const head = pts[0];
+          const neck = pts[1];
+          const headAngle = Math.atan2(head.y - neck.y, head.x - neck.x);
+          ctx.save();
+          ctx.translate(head.x, head.y);
+          ctx.rotate(headAngle);
+          // Head triangle
+          ctx.beginPath();
+          ctx.moveTo(segW * 0.5, 0);
+          ctx.lineTo(-segW * 0.2, -segW * 0.35);
+          ctx.lineTo(-segW * 0.2, segW * 0.35);
+          ctx.closePath();
+          ctx.fillStyle = '#1a7a1a';
+          ctx.fill();
+
+          // Yellow eyes with slit pupils
+          ctx.fillStyle = '#ffdd00';
+          ctx.beginPath();
+          ctx.ellipse(segW * 0.1, -segW * 0.2, 3.5, 4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(segW * 0.1, segW * 0.2, 3.5, 4, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Vertical slit pupils
+          ctx.fillStyle = '#000';
+          ctx.beginPath();
+          ctx.ellipse(segW * 0.1, -segW * 0.2, 1.2, 3.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(segW * 0.1, segW * 0.2, 1.2, 3.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Forked red tongue (flickering)
+          const tongueLen = segW * 0.5 * (0.8 + 0.4 * Math.sin(time * 8 + phase));
+          ctx.strokeStyle = '#dd2222';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(segW * 0.45, 0);
+          ctx.lineTo(segW * 0.45 + tongueLen, 0);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(segW * 0.45 + tongueLen * 0.7, 0);
+          ctx.lineTo(segW * 0.45 + tongueLen, -4);
+          ctx.moveTo(segW * 0.45 + tongueLen * 0.7, 0);
+          ctx.lineTo(segW * 0.45 + tongueLen, 4);
+          ctx.stroke();
+          ctx.restore();
+
+        } else if (ct === 1) {
+          // CROCODILE - long body, bumpy ridge, visible teeth, red eyes
+          const S = size;
+          // Body - slightly rounded green rectangle
+          const bodyGrad = ctx.createLinearGradient(0, -S * 0.35, 0, S * 0.35);
+          bodyGrad.addColorStop(0, '#2a5a1a');
+          bodyGrad.addColorStop(0.3, '#3a7a2a');
+          bodyGrad.addColorStop(0.7, '#3a7a2a');
+          bodyGrad.addColorStop(1, '#2a5a1a');
+          ctx.fillStyle = bodyGrad;
+          ctx.beginPath();
+          ctx.roundRect(-S * 1.2, -S * 0.3, S * 2.4, S * 0.6, 6);
+          ctx.fill();
+
+          // Darker bumpy ridge along back (series of small triangles)
+          ctx.fillStyle = '#1a4a10';
+          for (let i = 0; i < 8; i++) {
+            const rx = -S * 0.8 + i * S * 0.25;
+            ctx.beginPath();
+            ctx.moveTo(rx - 4, -S * 0.28);
+            ctx.lineTo(rx, -S * 0.42);
+            ctx.lineTo(rx + 4, -S * 0.28);
+            ctx.closePath();
             ctx.fill();
           }
-          // Head details (first segment = head)
-          const hx = (-segments / 2) * segSize * 0.8;
-          const hy = Math.sin(time * 4 + phase) * size * 0.4;
-          // Eyes
-          ctx.fillStyle = '#ff0';
+
+          // Head slightly wider
+          ctx.fillStyle = '#3a7a2a';
           ctx.beginPath();
-          ctx.arc(hx - 2, hy - 3, 2, 0, Math.PI * 2);
-          ctx.arc(hx + 2, hy - 3, 2, 0, Math.PI * 2);
+          ctx.roundRect(-S * 1.5, -S * 0.35, S * 0.45, S * 0.7, [8, 2, 2, 8]);
           ctx.fill();
-          ctx.fillStyle = '#000';
-          ctx.beginPath();
-          ctx.arc(hx - 2, hy - 3, 1, 0, Math.PI * 2);
-          ctx.arc(hx + 2, hy - 3, 1, 0, Math.PI * 2);
-          ctx.fill();
-          // Tongue
-          ctx.strokeStyle = '#cc0000';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(hx, hy + segSize * 0.4);
-          ctx.lineTo(hx - 3, hy + segSize * 0.7);
-          ctx.moveTo(hx, hy + segSize * 0.4);
-          ctx.lineTo(hx + 3, hy + segSize * 0.7);
-          ctx.stroke();
-        } else if (ct === 1) {
-          // Crocodile - long green rectangle with teeth zigzag
-          ctx.fillStyle = '#3a6b2a';
-          // Body
-          ctx.beginPath();
-          ctx.roundRect(-size * 1.1, -size * 0.25, size * 2.2, size * 0.5, 4);
-          ctx.fill();
-          // Darker top
-          ctx.fillStyle = '#2a5a1a';
-          ctx.beginPath();
-          ctx.roundRect(-size * 1.0, -size * 0.25, size * 2.0, size * 0.2, 3);
-          ctx.fill();
-          // Teeth zigzag (jaw)
-          ctx.fillStyle = '#fff';
-          ctx.beginPath();
-          const jawX = -size * 1.1;
-          for (let i = 0; i < 6; i++) {
-            const tx2 = jawX - size * 0.1 + i * size * 0.08;
-            ctx.moveTo(tx2, -size * 0.05);
-            ctx.lineTo(tx2 + size * 0.04, size * 0.1);
-            ctx.lineTo(tx2 + size * 0.08, -size * 0.05);
+
+          // Teeth visible (white zigzag at jaw)
+          ctx.fillStyle = '#f0f0e8';
+          for (let i = 0; i < 5; i++) {
+            const tx2 = -S * 1.5 + i * S * 0.09;
+            // Top teeth
+            ctx.beginPath();
+            ctx.moveTo(tx2, -S * 0.08);
+            ctx.lineTo(tx2 + S * 0.045, S * 0.06);
+            ctx.lineTo(tx2 + S * 0.09, -S * 0.08);
+            ctx.fill();
+            // Bottom teeth
+            ctx.beginPath();
+            ctx.moveTo(tx2, S * 0.08);
+            ctx.lineTo(tx2 + S * 0.045, -S * 0.04);
+            ctx.lineTo(tx2 + S * 0.09, S * 0.08);
+            ctx.fill();
           }
-          ctx.fill();
-          // Eye
-          ctx.fillStyle = '#ff0';
+
+          // Small red eyes
+          ctx.fillStyle = '#cc2200';
           ctx.beginPath();
-          ctx.arc(-size * 0.7, -size * 0.15, 3, 0, Math.PI * 2);
+          ctx.arc(-S * 1.15, -S * 0.2, 3, 0, Math.PI * 2);
           ctx.fill();
           ctx.fillStyle = '#000';
           ctx.beginPath();
-          ctx.arc(-size * 0.7, -size * 0.15, 1.5, 0, Math.PI * 2);
+          ctx.arc(-S * 1.15, -S * 0.2, 1.5, 0, Math.PI * 2);
           ctx.fill();
-          // Tail
-          ctx.strokeStyle = '#3a6b2a';
-          ctx.lineWidth = size * 0.3;
+
+          // Nostril
+          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          ctx.beginPath();
+          ctx.ellipse(-S * 1.42, -S * 0.15, 2, 1.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Tail with sine wave
+          ctx.strokeStyle = '#3a7a2a';
+          ctx.lineWidth = S * 0.28;
           ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.moveTo(size * 0.9, 0);
-          ctx.quadraticCurveTo(size * 1.3, Math.sin(time * 3 + phase) * size * 0.3, size * 1.4, 0);
+          ctx.moveTo(S * 1.0, 0);
+          ctx.bezierCurveTo(
+            S * 1.3, Math.sin(time * 2.5 + phase) * S * 0.35,
+            S * 1.5, Math.sin(time * 2.5 + phase + 1) * S * 0.25,
+            S * 1.6, Math.sin(time * 2.5 + phase + 2) * S * 0.15
+          );
           ctx.stroke();
           ctx.lineCap = 'butt';
-          // Bumps on back
+
+          // Belly texture
+          ctx.fillStyle = 'rgba(80,120,50,0.2)';
+          ctx.beginPath();
+          ctx.roundRect(-S * 0.8, S * 0.05, S * 1.6, S * 0.18, 3);
+          ctx.fill();
+
+          // Legs (small stubs)
           ctx.fillStyle = '#2a5a1a';
-          for (let i = 0; i < 5; i++) {
-            ctx.beginPath();
-            ctx.arc(-size * 0.5 + i * size * 0.35, -size * 0.28, 3, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          ctx.beginPath();
+          ctx.ellipse(-S * 0.5, S * 0.35, S * 0.12, S * 0.08, 0.2, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(S * 0.4, S * 0.35, S * 0.12, S * 0.08, -0.2, 0, Math.PI * 2);
+          ctx.fill();
+
         } else {
-          // Spider - black circle with 8 thin legs
-          // Body
-          ctx.fillStyle = '#1a1a1a';
+          // SPIDER - large black body, 8 thick jointed legs, red hourglass, silk thread
+          const S = size;
+
+          // Silk thread from top of screen
+          ctx.strokeStyle = 'rgba(200,200,200,0.25)';
+          ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
-          ctx.fill();
-          // Abdomen
+          ctx.moveTo(0, -S * 0.4);
+          // Convert to screen coords for thread to top
+          ctx.lineTo(0, -(y + S * 0.4));
+          ctx.stroke();
+
+          // Brown head (cephalothorax)
+          ctx.fillStyle = '#3a2a1a';
           ctx.beginPath();
-          ctx.arc(0, size * 0.3, size * 0.3, 0, Math.PI * 2);
-          ctx.fillStyle = '#222';
+          ctx.ellipse(0, -S * 0.15, S * 0.3, S * 0.25, 0, 0, Math.PI * 2);
           ctx.fill();
-          // Red marking on abdomen
-          ctx.fillStyle = '#cc0000';
+
+          // Large black oval abdomen
+          ctx.fillStyle = '#111';
           ctx.beginPath();
-          ctx.arc(0, size * 0.3, size * 0.1, 0, Math.PI * 2);
+          ctx.ellipse(0, S * 0.25, S * 0.35, S * 0.4, 0, 0, Math.PI * 2);
           ctx.fill();
-          // 8 legs
+          // Abdomen sheen
+          const abdSheen = ctx.createRadialGradient(-S * 0.08, S * 0.15, 0, 0, S * 0.25, S * 0.35);
+          abdSheen.addColorStop(0, 'rgba(60,60,60,0.3)');
+          abdSheen.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = abdSheen;
+          ctx.beginPath();
+          ctx.ellipse(0, S * 0.25, S * 0.35, S * 0.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Red hourglass marking
+          ctx.fillStyle = '#cc1100';
+          ctx.beginPath();
+          ctx.moveTo(0, S * 0.1);
+          ctx.lineTo(-S * 0.08, S * 0.2);
+          ctx.lineTo(0, S * 0.25);
+          ctx.lineTo(S * 0.08, S * 0.2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(0, S * 0.25);
+          ctx.lineTo(-S * 0.08, S * 0.35);
+          ctx.lineTo(0, S * 0.4);
+          ctx.lineTo(S * 0.08, S * 0.35);
+          ctx.closePath();
+          ctx.fill();
+
+          // 8 thick legs with joints (bent in middle)
           ctx.strokeStyle = '#1a1a1a';
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          const legSway = Math.sin(time * 3 + phase) * 0.15;
           for (let i = 0; i < 8; i++) {
             const side = i < 4 ? -1 : 1;
             const idx = i % 4;
-            const baseAngle = (idx * 0.4 + 0.3) * side;
-            const legLen = size * (0.8 + idx * 0.15);
-            const midX = Math.cos(baseAngle - Math.PI / 2) * size * 0.35;
-            const midY = Math.sin(baseAngle - Math.PI / 2) * size * 0.35;
-            const endX = Math.cos(baseAngle - Math.PI / 2 + side * 0.3) * legLen;
-            const endY = Math.sin(baseAngle - Math.PI / 2 + side * 0.3) * legLen;
-            const kneeX = (midX + endX) * 0.5 + side * size * 0.2;
-            const kneeY = (midY + endY) * 0.5 - size * 0.3;
+            const baseAng = (-0.6 - idx * 0.35) + legSway * (idx % 2 === 0 ? 1 : -1);
+            const legLen = S * (0.7 + idx * 0.1);
+            // Body attachment point
+            const ax = side * S * 0.2;
+            const ay = -S * 0.15 + idx * S * 0.06;
+            // Knee (bent upward)
+            const kneeAng = baseAng + side * 0.3;
+            const kneeX = ax + Math.cos(kneeAng) * legLen * 0.5 * side;
+            const kneeY = ay + Math.sin(kneeAng) * legLen * 0.5 - S * 0.25;
+            // Foot
+            const footX = kneeX + Math.cos(kneeAng + 1.2 * side) * legLen * 0.55 * side;
+            const footY = kneeY + Math.abs(Math.sin(kneeAng + 1.2)) * legLen * 0.55 + S * 0.15;
             ctx.beginPath();
-            ctx.moveTo(midX, midY);
-            ctx.quadraticCurveTo(kneeX, kneeY, endX, endY);
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(kneeX, kneeY);
+            ctx.lineTo(footX, footY);
             ctx.stroke();
           }
-          // Eyes (8 small dots)
-          ctx.fillStyle = '#ff0000';
-          for (let i = 0; i < 4; i++) {
-            const ex = -3 + i * 2;
+          ctx.lineCap = 'butt';
+
+          // 8 tiny red eyes (two rows)
+          ctx.fillStyle = '#ff2200';
+          const eyeRow1 = [-3, -1, 1, 3];
+          const eyeRow2 = [-2, 2];
+          for (const ex of eyeRow1) {
             ctx.beginPath();
-            ctx.arc(ex, -size * 0.3, 1, 0, Math.PI * 2);
+            ctx.arc(ex * 1.5, -S * 0.3, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          for (const ex of eyeRow2) {
+            ctx.beginPath();
+            ctx.arc(ex * 2, -S * 0.22, 1.2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // Small eye glints
+          ctx.fillStyle = 'rgba(255,100,80,0.5)';
+          for (const ex of eyeRow1) {
+            ctx.beginPath();
+            ctx.arc(ex * 1.5 - 0.5, -S * 0.31, 0.5, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -1317,22 +1859,24 @@ canvas {
   function drawThemedBall(worldIdx) {
     const w = WORLDS[worldIdx];
     const tc = w.trailColor;
+    // Jungle uses larger visual radius
+    const visualR = worldIdx === 0 ? 28 : BALL_RADIUS;
 
     // Trail
     for (let i = 0; i < trail.length; i++) {
       const t = trail[i];
       const alpha = (1 - t.age / 0.3) * 0.4 * (i / trail.length);
-      const r = BALL_RADIUS * (0.3 + 0.5 * (i / trail.length));
+      const r = visualR * (0.3 + 0.5 * (i / trail.length));
       ctx.beginPath();
       ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(${tc[0]},${tc[1]},${tc[2]},${alpha})`;
       ctx.fill();
     }
 
-    // Shadow
+    // Drop shadow beneath ball
     ctx.beginPath();
-    ctx.arc(ball.x + 2, ball.y + 2, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.ellipse(ball.x + 3, ball.y + visualR * 0.7, visualR * 0.7, visualR * 0.2, 0, 0, Math.PI * 2);
+    ctx.fillStyle = worldIdx === 0 ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.3)';
     ctx.fill();
 
     const flashAlpha = trapInvulnTimer > 0 ? (Math.sin(performance.now() / 50) * 0.5 + 0.5) : 1;
@@ -1340,49 +1884,75 @@ canvas {
 
     // Ball body
     const grad = ctx.createRadialGradient(
-      ball.x - BALL_RADIUS * 0.3, ball.y - BALL_RADIUS * 0.3, BALL_RADIUS * 0.1,
-      ball.x, ball.y, BALL_RADIUS
+      ball.x - visualR * 0.3, ball.y - visualR * 0.3, visualR * 0.1,
+      ball.x, ball.y, visualR
     );
-    grad.addColorStop(0, w.ballColors[2] || '#fff');
-    grad.addColorStop(0.6, w.ballColors[0]);
-    grad.addColorStop(1, w.ballColors[1]);
+    if (worldIdx === 0) {
+      // Rich brown coconut gradient
+      grad.addColorStop(0, '#c49a6c');
+      grad.addColorStop(0.3, '#8B5E3C');
+      grad.addColorStop(0.7, '#6B3F1F');
+      grad.addColorStop(1, '#3a1e0a');
+    } else {
+      grad.addColorStop(0, w.ballColors[2] || '#fff');
+      grad.addColorStop(0.6, w.ballColors[0]);
+      grad.addColorStop(1, w.ballColors[1]);
+    }
 
     ctx.beginPath();
-    ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+    ctx.arc(ball.x, ball.y, visualR, 0, Math.PI * 2);
     ctx.fillStyle = grad;
     ctx.fill();
 
     // World-specific ball decoration
     switch (worldIdx) {
-      case 0: // Jungle: coconut
-        // Texture lines (fibrous coconut shell)
-        ctx.strokeStyle = 'rgba(60,30,10,0.5)';
-        ctx.lineWidth = 0.8;
-        for (let i = 0; i < 5; i++) {
-          const a = i * 1.2 + 0.3;
+      case 0: {
+        // Jungle: detailed coconut
+        const R = visualR;
+        // Three dark curved lines (coconut texture)
+        ctx.strokeStyle = 'rgba(40,18,5,0.6)';
+        ctx.lineWidth = 1.8;
+        // Line 1 - horizontal curve
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y + R * 0.1, R * 0.7, -0.8, 0.8);
+        ctx.stroke();
+        // Line 2 - diagonal curve
+        ctx.beginPath();
+        ctx.arc(ball.x - R * 0.2, ball.y - R * 0.15, R * 0.6, 0.5, 2.2);
+        ctx.stroke();
+        // Line 3 - other diagonal
+        ctx.beginPath();
+        ctx.arc(ball.x + R * 0.2, ball.y + R * 0.2, R * 0.55, 2.5, 4.0);
+        ctx.stroke();
+
+        // Fibrous texture (thin lines)
+        ctx.strokeStyle = 'rgba(60,30,10,0.25)';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 8; i++) {
+          const a = i * 0.8 + 0.2;
           ctx.beginPath();
-          ctx.arc(ball.x, ball.y, BALL_RADIUS * (0.5 + i * 0.08), a, a + 1.5);
+          ctx.arc(ball.x, ball.y, R * (0.4 + i * 0.06), a, a + 0.9);
           ctx.stroke();
         }
-        // Darker brown top (cap)
+
+        // White shine spot top-left
         ctx.beginPath();
-        ctx.arc(ball.x, ball.y - BALL_RADIUS * 0.3, BALL_RADIUS * 0.5, Math.PI, Math.PI * 2);
-        ctx.fillStyle = 'rgba(50,25,5,0.45)';
+        ctx.arc(ball.x - R * 0.35, ball.y - R * 0.35, R * 0.18, 0, Math.PI * 2);
+        const shineGrad = ctx.createRadialGradient(
+          ball.x - R * 0.35, ball.y - R * 0.35, 0,
+          ball.x - R * 0.35, ball.y - R * 0.35, R * 0.18
+        );
+        shineGrad.addColorStop(0, 'rgba(255,255,255,0.6)');
+        shineGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = shineGrad;
         ctx.fill();
-        // Three dots on top (coconut eyes)
-        ctx.fillStyle = 'rgba(40,20,5,0.6)';
-        for (let i = 0; i < 3; i++) {
-          const da = (i / 3) * Math.PI * 2 - Math.PI / 2;
-          ctx.beginPath();
-          ctx.arc(ball.x + Math.cos(da) * 4, ball.y - BALL_RADIUS * 0.3 + Math.sin(da) * 3, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
         break;
+      }
       case 1: // Desert: sand texture dots
         ctx.fillStyle = 'rgba(0,0,0,0.15)';
         for (let i = 0; i < 5; i++) {
           const a = i * 1.3;
-          const r = BALL_RADIUS * 0.5;
+          const r = visualR * 0.5;
           ctx.beginPath();
           ctx.arc(ball.x + Math.cos(a) * r, ball.y + Math.sin(a) * r, 1.5, 0, Math.PI * 2);
           ctx.fill();
@@ -1401,32 +1971,34 @@ canvas {
         ctx.strokeStyle = 'rgba(0,0,0,0.3)';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(ball.x - BALL_RADIUS, ball.y);
-        ctx.lineTo(ball.x + BALL_RADIUS, ball.y);
+        ctx.moveTo(ball.x - visualR, ball.y);
+        ctx.lineTo(ball.x + visualR, ball.y);
         ctx.stroke();
         ctx.beginPath();
-        ctx.moveTo(ball.x, ball.y - BALL_RADIUS);
-        ctx.lineTo(ball.x, ball.y + BALL_RADIUS);
+        ctx.moveTo(ball.x, ball.y - visualR);
+        ctx.lineTo(ball.x, ball.y + visualR);
         ctx.stroke();
         break;
       case 4: // Space: visor shine
         ctx.strokeStyle = 'rgba(100,150,255,0.4)';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(ball.x, ball.y, BALL_RADIUS * 0.8, -0.8, 0.3);
+        ctx.arc(ball.x, ball.y, visualR * 0.8, -0.8, 0.3);
         ctx.stroke();
         ctx.fillStyle = 'rgba(200,220,255,0.15)';
         ctx.beginPath();
-        ctx.arc(ball.x, ball.y, BALL_RADIUS * 0.75, 0, Math.PI * 2);
+        ctx.arc(ball.x, ball.y, visualR * 0.75, 0, Math.PI * 2);
         ctx.fill();
         break;
     }
 
-    // Shine highlight
-    ctx.beginPath();
-    ctx.arc(ball.x - BALL_RADIUS * 0.3, ball.y - BALL_RADIUS * 0.3, BALL_RADIUS * 0.25, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fill();
+    // Shine highlight (skip for jungle - handled above)
+    if (worldIdx !== 0) {
+      ctx.beginPath();
+      ctx.arc(ball.x - visualR * 0.3, ball.y - visualR * 0.3, visualR * 0.25, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fill();
+    }
 
     // Speed boost glow ring
     if (speedBoostTimer > 0) {
@@ -1435,7 +2007,7 @@ canvas {
       ctx.shadowColor = '#80ff40';
       ctx.shadowBlur = 10;
       ctx.beginPath();
-      ctx.arc(ball.x, ball.y, BALL_RADIUS + 4, 0, Math.PI * 2);
+      ctx.arc(ball.x, ball.y, visualR + 4, 0, Math.PI * 2);
       ctx.stroke();
       ctx.shadowBlur = 0;
     }
@@ -1450,19 +2022,92 @@ canvas {
     for (const p of ambientParticles) {
       ctx.globalAlpha = p.alpha * (0.5 + 0.5 * Math.sin(p.phase));
 
+      // Jungle uses subtypes for multi-particle system
+      if (worldIdx === 0 && p.subtype) {
+        if (p.subtype === 'leaf') {
+          // Actual leaf shapes with rotation
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(Math.sin(p.phase * 0.7) * 1.2 + p.phase * 0.3);
+          const leafColors4 = ['#3a8a20', '#6db33f', '#8B6914', '#5a9a30'];
+          ctx.fillStyle = leafColors4[p.colorIdx || 0];
+          // Leaf shape using bezier
+          ctx.beginPath();
+          ctx.moveTo(-p.size * 2.5, 0);
+          ctx.bezierCurveTo(-p.size * 1.5, -p.size * 1.5, p.size * 1, -p.size * 1.2, p.size * 2.5, 0);
+          ctx.bezierCurveTo(p.size * 1, p.size * 1.2, -p.size * 1.5, p.size * 1.5, -p.size * 2.5, 0);
+          ctx.closePath();
+          ctx.fill();
+          // Central vein
+          ctx.strokeStyle = 'rgba(0,50,0,0.35)';
+          ctx.lineWidth = 0.6;
+          ctx.beginPath();
+          ctx.moveTo(-p.size * 2.2, 0);
+          ctx.lineTo(p.size * 2.2, 0);
+          ctx.stroke();
+          // Side veins
+          ctx.lineWidth = 0.3;
+          for (let v = -1; v <= 1; v++) {
+            if (v === 0) continue;
+            ctx.beginPath();
+            ctx.moveTo(v * p.size, 0);
+            ctx.lineTo(v * p.size * 1.5, v * -p.size * 0.6);
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else if (p.subtype === 'firefly') {
+          // Bright yellow-green dots with soft glow halo
+          const glowAlpha = 0.3 + 0.5 * Math.sin(p.phase * 2);
+          ctx.globalAlpha = p.alpha * glowAlpha;
+          // Outer glow halo
+          const ffGlow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size * 5);
+          ffGlow.addColorStop(0, 'rgba(180,255,80,0.3)');
+          ffGlow.addColorStop(0.4, 'rgba(150,230,60,0.1)');
+          ffGlow.addColorStop(1, 'rgba(100,200,40,0)');
+          ctx.fillStyle = ffGlow;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size * 5, 0, Math.PI * 2);
+          ctx.fill();
+          // Core bright dot
+          ctx.globalAlpha = p.alpha * (0.6 + 0.4 * glowAlpha);
+          ctx.fillStyle = '#ccff44';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.subtype === 'pollen') {
+          // Tiny white dots drifting upward
+          ctx.globalAlpha = p.alpha * (0.5 + 0.5 * Math.sin(p.phase));
+          ctx.fillStyle = 'rgba(255,255,240,0.7)';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (p.subtype === 'mist') {
+          // Large very low opacity white blobs moving sideways
+          ctx.globalAlpha = p.alpha * (0.6 + 0.4 * Math.sin(p.phase * 0.3));
+          const mistGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+          mistGrad.addColorStop(0, 'rgba(180,200,180,0.15)');
+          mistGrad.addColorStop(0.5, 'rgba(150,180,150,0.06)');
+          mistGrad.addColorStop(1, 'rgba(120,150,120,0)');
+          ctx.fillStyle = mistGrad;
+          ctx.beginPath();
+          ctx.ellipse(p.x, p.y, p.size * 1.5, p.size * 0.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        continue;
+      }
+
       switch (w.particleType) {
         case 'fallingLeaf':
           ctx.save();
           ctx.translate(p.x, p.y);
           ctx.rotate(Math.sin(p.phase * 0.7) * 0.8);
-          // Leaf shape
           const leafShade = Math.floor(p.phase * 3) % 3;
           const leafColors = ['#3a8a20', '#6db33f', '#8B6914'];
           ctx.fillStyle = leafColors[leafShade];
           ctx.beginPath();
           ctx.ellipse(0, 0, p.size * 2.5, p.size * 1.2, Math.sin(p.phase) * 0.3, 0, Math.PI * 2);
           ctx.fill();
-          // Leaf vein
           ctx.strokeStyle = 'rgba(0,50,0,0.3)';
           ctx.lineWidth = 0.5;
           ctx.beginPath();
@@ -1590,77 +2235,196 @@ canvas {
   // ========== DRAW HUD ==========
   function drawHUD() {
     const w = WORLDS[currentWorld];
+    const isJungle = currentWorld === 0;
 
-    // Level name - top center
-    ctx.font = '400 12px Orbitron';
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(w.icon + ' ' + w.name + ' - Level ' + (currentLevel + 1), W / 2, 12);
+    if (isJungle) {
+      // === JUNGLE HUD - dark green panels with leaf decorations ===
 
-    // Score - top left
-    ctx.font = '700 22px Orbitron';
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(score, 16, 36);
-
-    // Pass threshold indicator
-    if (score < PASS_SCORE) {
-      ctx.font = '400 10px Orbitron';
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fillText('NEED ' + PASS_SCORE, 16, 60);
-    } else {
-      ctx.font = '400 10px Orbitron';
-      ctx.fillStyle = 'rgba(80,220,120,0.7)';
-      ctx.fillText('PASS!', 16, 60);
-    }
-
-    // Combo - top right
-    if (combo > 1) {
-      ctx.font = '900 24px Orbitron';
-      ctx.textAlign = 'right';
-      const comboColors = { 2: '#4fc3f7', 4: '#ab47bc', 8: '#ff5722' };
-      ctx.fillStyle = comboColors[combo] || '#ffd700';
-      ctx.fillText('x' + combo, W - 16, 36);
-    }
-
-    // Timer bar - bottom
-    const barH = 6;
-    const barY = H - barH - 8;
-    const barW = W - 32;
-    const pct = Math.max(0, timeLeft / GAME_TIME);
-
-    if (currentWorld === 0) {
-      // Jungle: brown vine timer bar
-      ctx.fillStyle = 'rgba(60,30,10,0.3)';
+      // Level name panel - top center
+      const labelText = '\u{1F33F} ' + w.name + ' - Level ' + (currentLevel + 1);
+      ctx.font = '400 12px Orbitron';
+      const labelW = ctx.measureText(labelText).width + 24;
+      // Dark green panel background
+      ctx.fillStyle = 'rgba(10,40,10,0.65)';
       ctx.beginPath();
-      ctx.roundRect(16, barY, barW, barH, 3);
+      ctx.roundRect(W / 2 - labelW / 2, 6, labelW, 22, 6);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(40,100,30,0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Tiny leaf decorations on panel corners
+      ctx.fillStyle = 'rgba(60,130,30,0.5)';
+      ctx.beginPath();
+      ctx.ellipse(W / 2 - labelW / 2 + 4, 10, 5, 2.5, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(W / 2 + labelW / 2 - 4, 10, 5, 2.5, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      // Label text
+      ctx.fillStyle = 'rgba(200,230,180,0.8)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(labelText, W / 2, 10);
 
-      // Vine fill
+      // Score panel - top left (dark green panel)
+      ctx.fillStyle = 'rgba(10,40,10,0.65)';
+      ctx.beginPath();
+      ctx.roundRect(10, 32, 90, 44, 8);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(40,100,30,0.4)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Score value
+      ctx.font = '700 22px Orbitron';
+      ctx.fillStyle = '#e0f0c0';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(score, 18, 36);
+      // Pass indicator
+      if (score < PASS_SCORE) {
+        ctx.font = '400 9px Orbitron';
+        ctx.fillStyle = 'rgba(180,200,150,0.5)';
+        ctx.fillText('NEED ' + PASS_SCORE, 18, 60);
+      } else {
+        ctx.font = '400 9px Orbitron';
+        ctx.fillStyle = 'rgba(120,230,80,0.8)';
+        ctx.fillText('PASS!', 18, 60);
+      }
+
+      // Combo panel - top right
+      if (combo > 1) {
+        ctx.fillStyle = 'rgba(10,40,10,0.65)';
+        ctx.beginPath();
+        ctx.roundRect(W - 70, 32, 60, 34, 8);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(40,100,30,0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.font = '900 22px Orbitron';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        const comboColors = { 2: '#80e050', 4: '#e0d040', 8: '#ff6030' };
+        ctx.fillStyle = comboColors[combo] || '#ffd700';
+        ctx.fillText('x' + combo, W - 16, 36);
+      }
+
+      // Timer bar - vine style (bottom)
+      const barH = 8;
+      const barY = H - barH - 10;
+      const barW = W - 32;
+      const pct = Math.max(0, timeLeft / GAME_TIME);
+
+      // Vine background (brown, organic edges)
+      ctx.fillStyle = 'rgba(40,20,8,0.5)';
+      ctx.beginPath();
+      ctx.roundRect(16, barY - 1, barW, barH + 2, 4);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(60,30,10,0.3)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Vine fill with organic texture
       const vineW = barW * pct;
       if (vineW > 2) {
         const vg = ctx.createLinearGradient(16, barY, 16 + vineW, barY);
-        vg.addColorStop(0, '#5a3015');
-        vg.addColorStop(0.5, '#8B5E3C');
-        vg.addColorStop(1, pct > 0.2 ? '#6B3F1F' : '#cc3300');
+        if (pct > 0.2) {
+          vg.addColorStop(0, '#3a5a15');
+          vg.addColorStop(0.3, '#5a8a25');
+          vg.addColorStop(0.6, '#4a7a1a');
+          vg.addColorStop(1, '#3a6515');
+        } else {
+          vg.addColorStop(0, '#8a3a10');
+          vg.addColorStop(0.5, '#cc4400');
+          vg.addColorStop(1, '#aa3300');
+        }
         ctx.fillStyle = vg;
         ctx.beginPath();
-        ctx.roundRect(16, barY, vineW, barH, 3);
+        ctx.roundRect(16, barY, vineW, barH, 4);
         ctx.fill();
 
-        // Small leaf buds along vine
-        ctx.fillStyle = '#4a8a2a';
-        const leafCount = Math.floor(vineW / 40);
-        for (let i = 0; i < leafCount; i++) {
-          const lx = 16 + (i + 1) * vineW / (leafCount + 1);
+        // Organic edges (slightly bumpy top edge)
+        ctx.fillStyle = pct > 0.2 ? 'rgba(80,140,30,0.3)' : 'rgba(180,60,20,0.3)';
+        for (let i = 0; i < Math.floor(vineW / 15); i++) {
+          const bx = 20 + i * 15;
+          if (bx > 16 + vineW - 5) break;
           ctx.beginPath();
-          ctx.ellipse(lx, barY - 1, 4, 2, -0.3, 0, Math.PI * 2);
+          ctx.ellipse(bx, barY, 3, 1.5, 0, 0, Math.PI * 2);
           ctx.fill();
         }
+
+        // Leaf buds along vine
+        ctx.fillStyle = pct > 0.2 ? '#60a030' : '#aa5520';
+        const leafCount = Math.floor(vineW / 50);
+        for (let i = 0; i < leafCount; i++) {
+          const lx = 16 + (i + 1) * vineW / (leafCount + 1);
+          ctx.save();
+          ctx.translate(lx, barY - 2);
+          ctx.rotate(-0.3);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, 5, 2.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
       }
+
+      // Time text
+      ctx.font = '400 11px Orbitron';
+      ctx.fillStyle = 'rgba(180,210,150,0.7)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(Math.ceil(timeLeft) + 's', W / 2, barY - 16);
+
+      // Speed boost indicator
+      if (speedBoostTimer > 0) {
+        ctx.font = '700 12px Orbitron';
+        ctx.fillStyle = `rgba(128,255,64,${0.6 + 0.4 * Math.sin(performance.now() / 150)})`;
+        ctx.textAlign = 'center';
+        ctx.fillText('SPEED BOOST!', W / 2, barY - 32);
+      }
+
     } else {
+      // === Non-jungle HUD (original style) ===
+
+      // Level name - top center
+      ctx.font = '400 12px Orbitron';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(w.icon + ' ' + w.name + ' - Level ' + (currentLevel + 1), W / 2, 12);
+
+      // Score - top left
+      ctx.font = '700 22px Orbitron';
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(score, 16, 36);
+
+      // Pass threshold indicator
+      if (score < PASS_SCORE) {
+        ctx.font = '400 10px Orbitron';
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        ctx.fillText('NEED ' + PASS_SCORE, 16, 60);
+      } else {
+        ctx.font = '400 10px Orbitron';
+        ctx.fillStyle = 'rgba(80,220,120,0.7)';
+        ctx.fillText('PASS!', 16, 60);
+      }
+
+      // Combo - top right
+      if (combo > 1) {
+        ctx.font = '900 24px Orbitron';
+        ctx.textAlign = 'right';
+        const comboColors = { 2: '#4fc3f7', 4: '#ab47bc', 8: '#ff5722' };
+        ctx.fillStyle = comboColors[combo] || '#ffd700';
+        ctx.fillText('x' + combo, W - 16, 36);
+      }
+
+      // Timer bar - bottom
+      const barH = 6;
+      const barY = H - barH - 8;
+      const barW = W - 32;
+      const pct = Math.max(0, timeLeft / GAME_TIME);
+
       ctx.fillStyle = 'rgba(255,255,255,0.1)';
       ctx.beginPath();
       ctx.roundRect(16, barY, barW, barH, 3);
@@ -1674,20 +2438,20 @@ canvas {
       ctx.beginPath();
       ctx.roundRect(16, barY, barW * pct, barH, 3);
       ctx.fill();
-    }
 
-    // Time text
-    ctx.font = '400 11px Orbitron';
-    ctx.fillStyle = currentWorld === 0 ? 'rgba(200,180,140,0.7)' : 'rgba(255,255,255,0.5)';
-    ctx.textAlign = 'center';
-    ctx.fillText(Math.ceil(timeLeft) + 's', W / 2, barY - 14);
-
-    // Speed boost active indicator
-    if (speedBoostTimer > 0) {
-      ctx.font = '700 12px Orbitron';
-      ctx.fillStyle = `rgba(128,255,64,${0.6 + 0.4 * Math.sin(performance.now() / 150)})`;
+      // Time text
+      ctx.font = '400 11px Orbitron';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.textAlign = 'center';
-      ctx.fillText('SPEED BOOST!', W / 2, barY - 28);
+      ctx.fillText(Math.ceil(timeLeft) + 's', W / 2, barY - 14);
+
+      // Speed boost active indicator
+      if (speedBoostTimer > 0) {
+        ctx.font = '700 12px Orbitron';
+        ctx.fillStyle = `rgba(128,255,64,${0.6 + 0.4 * Math.sin(performance.now() / 150)})`;
+        ctx.textAlign = 'center';
+        ctx.fillText('SPEED BOOST!', W / 2, barY - 28);
+      }
     }
   }
 
@@ -2033,11 +2797,12 @@ canvas {
     // Background
     if (currentWorld === 0) {
       drawJungleBackground();
+      // No grid for jungle - doesn't fit the organic aesthetic
     } else {
       ctx.fillStyle = w.bg;
       ctx.fillRect(-10, -10, W + 20, H + 20);
+      drawGrid(w.gridColor);
     }
-    drawGrid(w.gridColor);
 
     // Ambient particles
     drawAmbientParticles(currentWorld);
@@ -2064,6 +2829,11 @@ canvas {
 
     // Effects
     drawEffects();
+
+    // Jungle lighting overlay (torch/flashlight effect)
+    if (currentWorld === 0) {
+      drawJungleLighting();
+    }
 
     ctx.restore();
 
