@@ -3,6 +3,7 @@
   "short_name": "TiltBall",
   "start_url": ".",
   "display": "standalone",
+  "orientation": "landscape",
   "background_color": "#050810",
   "theme_color": "#06D6A0",
   "icons": [
