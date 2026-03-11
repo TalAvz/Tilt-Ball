@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#06D6A0">
+<meta name="screen-orientation" content="landscape">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
@@ -15,7 +16,7 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body {
-  width: 100%; height: 100%;
+  width: 100vw; height: 100dvh;
   overflow: hidden;
   background: #050810;
   touch-action: none;
@@ -23,10 +24,12 @@ html, body {
   -webkit-user-select: none;
   user-select: none;
   font-family: 'Orbitron', monospace;
+  position: fixed;
+  top: 0; left: 0;
 }
 canvas {
   display: block;
-  width: 100%; height: 100%;
+  width: 100vw; height: 100dvh;
 }
 </style>
 </head>
@@ -377,6 +380,10 @@ canvas {
   canvas.addEventListener('click', (e) => {
     if (touchDragging) { touchDragging = false; return; }
     initAudio();
+    // Lock to landscape on first user gesture
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {});
+    }
     const cx = e.clientX, cy = e.clientY;
 
     if (state === 'permission') {
@@ -526,7 +533,19 @@ canvas {
       if (Math.sqrt(dx * dx + dy * dy) < 120) continue;
       break;
     }
-    const angle = Math.random() * Math.PI * 2;
+    // Favor horizontal and diagonal patterns for landscape layout
+    const pattern = Math.random();
+    let angle;
+    if (pattern < 0.4) {
+      // Horizontal bouncing (slight vertical variation)
+      angle = (Math.random() < 0.5 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.3;
+    } else if (pattern < 0.7) {
+      // Diagonal paths
+      angle = Math.PI * 0.25 + Math.floor(Math.random() * 4) * Math.PI * 0.5 + (Math.random() - 0.5) * 0.2;
+    } else {
+      // Fully random direction
+      angle = Math.random() * Math.PI * 2;
+    }
     traps.push({
       x, y,
       vx: Math.cos(angle) * speed,
@@ -899,25 +918,43 @@ canvas {
   function drawJungleBackground() {
     const time = performance.now() / 1000;
 
-    // === LAYER 1: Sky / Canopy (top 25%) ===
-    // Dark emerald to deep green gradient
-    const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
-    skyGrad.addColorStop(0, '#041a04');
-    skyGrad.addColorStop(0.15, '#0a2e0a');
-    skyGrad.addColorStop(0.4, '#0d3a0d');
-    skyGrad.addColorStop(0.7, '#123d12');
-    skyGrad.addColorStop(1, '#1a4a1a');
+    // === LAYER 1: Sky / Canopy gradient (landscape: left-to-right sunlight) ===
+    const skyGrad = ctx.createLinearGradient(0, 0, W, H);
+    skyGrad.addColorStop(0, '#0a2e0a');
+    skyGrad.addColorStop(0.2, '#0d3a0d');
+    skyGrad.addColorStop(0.5, '#123d12');
+    skyGrad.addColorStop(0.8, '#0d3a0d');
+    skyGrad.addColorStop(1, '#041a04');
     ctx.fillStyle = skyGrad;
     ctx.fillRect(-10, -10, W + 20, H + 20);
 
-    // Dappled sunlight effect - soft yellow circles
+    // Sunlight rays coming from left side
+    for (let r = 0; r < 5; r++) {
+      const rayY = H * 0.1 + r * H * 0.2;
+      const rayAngle = 0.1 + r * 0.05;
+      const rayLen = W * 0.6 + Math.sin(time * 0.3 + r) * W * 0.1;
+      const rayAlpha = 0.03 + 0.015 * Math.sin(time * 0.4 + r * 1.2);
+      ctx.save();
+      ctx.translate(0, rayY);
+      ctx.rotate(rayAngle);
+      const rg = ctx.createLinearGradient(0, 0, rayLen, 0);
+      rg.addColorStop(0, `rgba(255,240,120,${rayAlpha * 2})`);
+      rg.addColorStop(0.3, `rgba(200,220,80,${rayAlpha})`);
+      rg.addColorStop(1, 'rgba(100,150,50,0)');
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, -15 - r * 5, rayLen, 30 + r * 10);
+      ctx.restore();
+    }
+
+    // Dappled sunlight spots - spread across landscape
     const sunSpots = [
-      { x: W * 0.15, y: H * 0.08, r: 60 },
-      { x: W * 0.45, y: H * 0.12, r: 80 },
-      { x: W * 0.75, y: H * 0.06, r: 55 },
-      { x: W * 0.3, y: H * 0.22, r: 45 },
-      { x: W * 0.65, y: H * 0.18, r: 65 },
-      { x: W * 0.9, y: H * 0.15, r: 50 }
+      { x: W * 0.08, y: H * 0.15, r: 55 },
+      { x: W * 0.2, y: H * 0.08, r: 70 },
+      { x: W * 0.35, y: H * 0.2, r: 60 },
+      { x: W * 0.5, y: H * 0.1, r: 75 },
+      { x: W * 0.65, y: H * 0.18, r: 50 },
+      { x: W * 0.8, y: H * 0.06, r: 65 },
+      { x: W * 0.92, y: H * 0.14, r: 45 }
     ];
     for (const sp of sunSpots) {
       const pulse = 1 + 0.15 * Math.sin(time * 0.5 + sp.x * 0.01);
@@ -931,68 +968,65 @@ canvas {
       ctx.fill();
     }
 
-    // Large tropical canopy leaves along top edge
+    // Canopy leaves draping down from TOP edge (wider spread for landscape)
     function drawCanopyLeaf(lx, ly, leafW, leafH, angle, shade) {
       ctx.save();
       ctx.translate(lx, ly);
       ctx.rotate(angle + Math.sin(time * 0.3 + lx * 0.01) * 0.03);
-      // Leaf body
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.bezierCurveTo(leafW * 0.3, -leafH * 0.4, leafW * 0.8, -leafH * 0.3, leafW, -leafH * 0.1);
       ctx.bezierCurveTo(leafW * 0.9, leafH * 0.2, leafW * 0.4, leafH * 0.3, 0, 0);
       ctx.fillStyle = shade;
       ctx.fill();
-      // Leaf vein (central)
       ctx.strokeStyle = 'rgba(0,40,0,0.3)';
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.quadraticCurveTo(leafW * 0.5, -leafH * 0.05, leafW * 0.9, -leafH * 0.05);
       ctx.stroke();
-      // Side veins
       ctx.lineWidth = 0.6;
       ctx.strokeStyle = 'rgba(0,40,0,0.2)';
       for (let v = 1; v <= 4; v++) {
         const vx = leafW * v * 0.2;
         const vy = -leafH * 0.05 * v * 0.15;
-        ctx.beginPath();
-        ctx.moveTo(vx, vy);
-        ctx.lineTo(vx + leafW * 0.12, vy - leafH * 0.15);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(vx, vy);
-        ctx.lineTo(vx + leafW * 0.1, vy + leafH * 0.12);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(vx + leafW * 0.12, vy - leafH * 0.15); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(vx + leafW * 0.1, vy + leafH * 0.12); ctx.stroke();
       }
       ctx.restore();
     }
 
-    // Top canopy leaves - layered
+    // Top canopy leaves - more leaves spread across wider top edge
     const canopyLeaves = [
       { x: -20, y: -5, w: 120, h: 60, a: 0.2, c: 'rgba(10,60,10,0.9)' },
-      { x: W * 0.12, y: -10, w: 140, h: 70, a: -0.1, c: 'rgba(15,70,15,0.85)' },
-      { x: W * 0.3, y: -8, w: 110, h: 55, a: 0.3, c: 'rgba(20,55,10,0.9)' },
-      { x: W * 0.48, y: -12, w: 130, h: 65, a: -0.2, c: 'rgba(12,65,12,0.88)' },
-      { x: W * 0.65, y: -5, w: 120, h: 58, a: 0.15, c: 'rgba(18,50,12,0.92)' },
-      { x: W * 0.8, y: -8, w: 140, h: 68, a: -0.25, c: 'rgba(10,60,10,0.87)' },
+      { x: W * 0.08, y: -10, w: 140, h: 70, a: -0.1, c: 'rgba(15,70,15,0.85)' },
+      { x: W * 0.18, y: -8, w: 110, h: 55, a: 0.3, c: 'rgba(20,55,10,0.9)' },
+      { x: W * 0.28, y: -12, w: 130, h: 65, a: -0.2, c: 'rgba(12,65,12,0.88)' },
+      { x: W * 0.38, y: -5, w: 120, h: 58, a: 0.15, c: 'rgba(18,50,12,0.92)' },
+      { x: W * 0.48, y: -8, w: 140, h: 68, a: -0.25, c: 'rgba(10,60,10,0.87)' },
+      { x: W * 0.58, y: -6, w: 115, h: 56, a: 0.2, c: 'rgba(15,55,10,0.9)' },
+      { x: W * 0.68, y: -10, w: 130, h: 62, a: -0.15, c: 'rgba(12,65,12,0.86)' },
+      { x: W * 0.78, y: -4, w: 120, h: 58, a: 0.25, c: 'rgba(18,50,12,0.91)' },
+      { x: W * 0.88, y: -9, w: 110, h: 54, a: -0.1, c: 'rgba(10,60,10,0.88)' },
       { x: W - 40, y: -3, w: 100, h: 50, a: 0.1, c: 'rgba(15,55,10,0.9)' },
       // Second layer (lighter, overlapping)
-      { x: W * 0.08, y: 5, w: 100, h: 50, a: 0.35, c: 'rgba(25,80,20,0.7)' },
-      { x: W * 0.35, y: 8, w: 90, h: 45, a: -0.3, c: 'rgba(30,85,25,0.65)' },
-      { x: W * 0.55, y: 3, w: 110, h: 52, a: 0.2, c: 'rgba(22,75,18,0.72)' },
-      { x: W * 0.78, y: 6, w: 95, h: 48, a: -0.15, c: 'rgba(28,70,22,0.68)' }
+      { x: W * 0.05, y: 5, w: 100, h: 50, a: 0.35, c: 'rgba(25,80,20,0.7)' },
+      { x: W * 0.2, y: 8, w: 90, h: 45, a: -0.3, c: 'rgba(30,85,25,0.65)' },
+      { x: W * 0.35, y: 3, w: 110, h: 52, a: 0.2, c: 'rgba(22,75,18,0.72)' },
+      { x: W * 0.5, y: 6, w: 95, h: 48, a: -0.15, c: 'rgba(28,70,22,0.68)' },
+      { x: W * 0.65, y: 4, w: 105, h: 50, a: 0.25, c: 'rgba(24,78,20,0.7)' },
+      { x: W * 0.82, y: 7, w: 100, h: 46, a: -0.2, c: 'rgba(26,72,22,0.66)' }
     ];
     for (const cl of canopyLeaves) {
       drawCanopyLeaf(cl.x, cl.y, cl.w, cl.h, cl.a, cl.c);
     }
 
-    // === LAYER 2: Mid jungle - Tree trunks and vines ===
+    // === LAYER 2: Tree trunks along TOP and BOTTOM edges (horizontal for landscape) ===
 
-    // Draw tropical tree trunks on left and right edges
-    function drawTreeTrunk(tx, trunkW, trunkH, leavesRight) {
-      // Trunk body - cylindrical with highlight
-      const tg = ctx.createLinearGradient(tx - trunkW / 2, 0, tx + trunkW / 2, 0);
+    // Draw horizontal tree trunk/branch along an edge
+    function drawHorizontalTrunk(tx, ty, trunkLen, trunkH, leavesDown) {
+      // Trunk body - horizontal
+      const tg = ctx.createLinearGradient(tx, ty - trunkH / 2, tx, ty + trunkH / 2);
       tg.addColorStop(0, '#3d2510');
       tg.addColorStop(0.3, '#6b4226');
       tg.addColorStop(0.5, '#7a5030');
@@ -1000,39 +1034,37 @@ canvas {
       tg.addColorStop(1, '#2d1a08');
       ctx.fillStyle = tg;
       ctx.beginPath();
-      ctx.roundRect(tx - trunkW / 2, H - trunkH, trunkW, trunkH + 10, [3, 3, 0, 0]);
+      ctx.roundRect(tx, ty - trunkH / 2, trunkLen, trunkH, [0, 0, 3, 3]);
       ctx.fill();
 
       // Moss patches on trunk
       ctx.fillStyle = 'rgba(30,70,15,0.4)';
       for (let m = 0; m < 4; m++) {
-        const my = H - trunkH + m * trunkH * 0.25 + Math.sin(m * 2.1) * 10;
-        const mx = tx + (Math.sin(m * 3.7) * trunkW * 0.2);
+        const mx = tx + m * trunkLen * 0.25 + Math.sin(m * 2.1) * 10;
+        const my = ty + (Math.sin(m * 3.7) * trunkH * 0.2);
         ctx.beginPath();
-        ctx.ellipse(mx, my, trunkW * 0.3 + Math.sin(m) * 3, 6 + Math.sin(m * 1.3) * 3, 0.2, 0, Math.PI * 2);
+        ctx.ellipse(mx, my, 6 + Math.sin(m * 1.3) * 3, trunkH * 0.3 + Math.sin(m) * 3, 0.2, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Large exotic leaves branching out
-      const leafDir = leavesRight ? 1 : -1;
+      // Leaves branching out from trunk
+      const leafDir = leavesDown ? 1 : -1;
       const trunkLeaves = [
-        { y: H - trunkH * 0.9, len: 50, ang: leafDir * 0.5 },
-        { y: H - trunkH * 0.7, len: 65, ang: leafDir * 0.3 },
-        { y: H - trunkH * 0.5, len: 55, ang: leafDir * 0.7 },
-        { y: H - trunkH * 0.3, len: 45, ang: leafDir * 0.4 }
+        { x: tx + trunkLen * 0.1, len: 45, ang: leafDir * 0.8 },
+        { x: tx + trunkLen * 0.3, len: 60, ang: leafDir * 0.5 },
+        { x: tx + trunkLen * 0.6, len: 50, ang: leafDir * 0.9 },
+        { x: tx + trunkLen * 0.85, len: 40, ang: leafDir * 0.6 }
       ];
       for (const tl of trunkLeaves) {
         ctx.save();
-        ctx.translate(tx, tl.y);
+        ctx.translate(tl.x, ty);
         ctx.rotate(tl.ang);
-        // Leaf shape
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.bezierCurveTo(tl.len * 0.3, -12, tl.len * 0.7, -8, tl.len, -2);
         ctx.bezierCurveTo(tl.len * 0.7, 8, tl.len * 0.3, 10, 0, 0);
         ctx.fillStyle = `rgba(${20 + Math.random() * 20},${60 + Math.random() * 30},${10 + Math.random() * 15},0.7)`;
         ctx.fill();
-        // Central vein
         ctx.strokeStyle = 'rgba(0,40,0,0.3)';
         ctx.lineWidth = 0.8;
         ctx.beginPath();
@@ -1043,20 +1075,21 @@ canvas {
       }
     }
 
-    // Left trunks
-    drawTreeTrunk(18, 28, H * 0.7, true);
-    drawTreeTrunk(50, 22, H * 0.55, true);
-    // Right trunks
-    drawTreeTrunk(W - 18, 28, H * 0.65, false);
-    drawTreeTrunk(W - 48, 20, H * 0.5, false);
+    // Top edge trunks (branches growing from top)
+    drawHorizontalTrunk(0, 10, W * 0.35, 22, true);
+    drawHorizontalTrunk(W * 0.4, 5, W * 0.3, 18, true);
+    drawHorizontalTrunk(W * 0.75, 12, W * 0.26, 20, true);
+    // Bottom edge trunks (roots/branches along bottom)
+    drawHorizontalTrunk(0, H - 12, W * 0.3, 20, false);
+    drawHorizontalTrunk(W * 0.35, H - 8, W * 0.35, 24, false);
+    drawHorizontalTrunk(W * 0.72, H - 10, W * 0.29, 18, false);
 
-    // Hanging vines from top
-    for (let i = 0; i < 12; i++) {
-      const vx = 30 + i * (W - 60) / 11;
-      const vlen = 50 + Math.sin(i * 1.7) * 40 + 20;
+    // Hanging vines from top edge (more spread for landscape)
+    for (let i = 0; i < 16; i++) {
+      const vx = 20 + i * (W - 40) / 15;
+      const vlen = 40 + Math.sin(i * 1.7) * 30 + 20;
       const sway = Math.sin(time * 0.6 + i * 1.3) * 10;
       const sway2 = Math.sin(time * 0.4 + i * 2.1) * 6;
-      // Vine line
       ctx.strokeStyle = i % 3 === 0 ? 'rgba(50,30,10,0.35)' : 'rgba(25,65,15,0.3)';
       ctx.lineWidth = 1.5 + (i % 2);
       ctx.beginPath();
@@ -1067,7 +1100,6 @@ canvas {
         vx + sway * 0.7, vlen
       );
       ctx.stroke();
-      // Small leaves on some vines
       if (i % 2 === 0) {
         const leafY = vlen * 0.6;
         const leafX = vx + sway * 0.5;
@@ -1082,9 +1114,8 @@ canvas {
       }
     }
 
-    // === LAYER 3: Ground ===
-    // Dark soil ground with texture (bottom 15%)
-    const groundH = H * 0.15;
+    // === LAYER 3: Ground cover rising from BOTTOM edge ===
+    const groundH = H * 0.12;
     const groundY = H - groundH;
     const groundGrad = ctx.createLinearGradient(0, groundY, 0, H);
     groundGrad.addColorStop(0, '#1a1208');
@@ -1092,32 +1123,31 @@ canvas {
     groundGrad.addColorStop(1, '#0d0a06');
     ctx.fillStyle = groundGrad;
     ctx.beginPath();
-    // Irregular top edge for ground
     ctx.moveTo(-10, H + 10);
     ctx.lineTo(-10, groundY + 8);
     for (let gx = 0; gx <= W; gx += 20) {
-      ctx.lineTo(gx, groundY + Math.sin(gx * 0.05 + 1.5) * 6 + Math.sin(gx * 0.12) * 3);
+      ctx.lineTo(gx, groundY + Math.sin(gx * 0.04 + 1.5) * 5 + Math.sin(gx * 0.1) * 3);
     }
     ctx.lineTo(W + 10, H + 10);
     ctx.closePath();
     ctx.fill();
 
-    // Ground texture - small roots, dirt specks
+    // Ground texture
     ctx.fillStyle = 'rgba(40,28,12,0.4)';
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < 20; i++) {
       const rx = (i * 67 + 23) % W;
-      const ry = groundY + 10 + (i * 31 % Math.floor(groundH - 15));
+      const ry = groundY + 10 + (i * 31 % Math.max(1, Math.floor(groundH - 15)));
       ctx.beginPath();
       ctx.ellipse(rx, ry, 3 + (i % 3), 1.5, i * 0.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Grass tufts
+    // Grass tufts (more spread for wider canvas)
     ctx.strokeStyle = 'rgba(30,70,15,0.5)';
     ctx.lineWidth = 1.5;
-    for (let i = 0; i < 20; i++) {
-      const gx = (i * 53 + 10) % W;
-      const gy = groundY + Math.sin(gx * 0.05 + 1.5) * 6;
+    for (let i = 0; i < 30; i++) {
+      const gx = (i * W / 30 + 10) % W;
+      const gy = groundY + Math.sin(gx * 0.04 + 1.5) * 5;
       for (let b = -1; b <= 1; b++) {
         ctx.beginPath();
         ctx.moveTo(gx + b * 2, gy);
@@ -1128,8 +1158,8 @@ canvas {
 
     // Fallen leaves on ground
     const fallenColors = ['rgba(90,60,10,0.3)', 'rgba(60,80,15,0.25)', 'rgba(100,70,20,0.2)'];
-    for (let i = 0; i < 8; i++) {
-      const fx = (i * 89 + 40) % W;
+    for (let i = 0; i < 12; i++) {
+      const fx = (i * W / 12 + 40) % W;
       const fy = groundY + 5 + (i * 17 % 15);
       ctx.fillStyle = fallenColors[i % 3];
       ctx.beginPath();
@@ -1137,16 +1167,16 @@ canvas {
       ctx.fill();
     }
 
-    // Mist/fog at ground level
-    for (let i = 0; i < 4; i++) {
-      const mx = (i * W / 4 + Math.sin(time * 0.15 + i) * 30) % W;
-      const mistGrad = ctx.createRadialGradient(mx, groundY, 0, mx, groundY, 80 + i * 15);
+    // Mist hugging bottom edge
+    for (let i = 0; i < 6; i++) {
+      const mx = (i * W / 6 + Math.sin(time * 0.15 + i) * 30) % W;
+      const mistGrad = ctx.createRadialGradient(mx, groundY, 0, mx, groundY, 90 + i * 12);
       mistGrad.addColorStop(0, 'rgba(180,200,180,0.06)');
       mistGrad.addColorStop(0.5, 'rgba(150,180,150,0.03)');
       mistGrad.addColorStop(1, 'rgba(100,140,100,0)');
       ctx.fillStyle = mistGrad;
       ctx.beginPath();
-      ctx.ellipse(mx, groundY + 5, 100 + i * 20, 25, 0, 0, Math.PI * 2);
+      ctx.ellipse(mx, groundY + 5, 110 + i * 15, 25, 0, 0, Math.PI * 2);
       ctx.fill();
     }
   }
