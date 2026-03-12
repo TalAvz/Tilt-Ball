@@ -40,6 +40,10 @@ canvas {
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
 
+  // Preload jungle background image
+  const jungleBg = new Image();
+  jungleBg.src = 'jungle-bg.png';
+
   // ========== CONSTANTS ==========
   const BALL_RADIUS = 14;
   const STAR_RADIUS = 16;
@@ -916,269 +920,18 @@ canvas {
 
   // ========== DRAW HELPERS ==========
   function drawJungleBackground() {
-    const time = performance.now() / 1000;
-
-    // === LAYER 1: Sky / Canopy gradient (landscape: left-to-right sunlight) ===
-    const skyGrad = ctx.createLinearGradient(0, 0, W, H);
-    skyGrad.addColorStop(0, '#0a2e0a');
-    skyGrad.addColorStop(0.2, '#0d3a0d');
-    skyGrad.addColorStop(0.5, '#123d12');
-    skyGrad.addColorStop(0.8, '#0d3a0d');
-    skyGrad.addColorStop(1, '#041a04');
-    ctx.fillStyle = skyGrad;
-    ctx.fillRect(-10, -10, W + 20, H + 20);
-
-    // Sunlight rays coming from left side
-    for (let r = 0; r < 5; r++) {
-      const rayY = H * 0.1 + r * H * 0.2;
-      const rayAngle = 0.1 + r * 0.05;
-      const rayLen = W * 0.6 + Math.sin(time * 0.3 + r) * W * 0.1;
-      const rayAlpha = 0.03 + 0.015 * Math.sin(time * 0.4 + r * 1.2);
-      ctx.save();
-      ctx.translate(0, rayY);
-      ctx.rotate(rayAngle);
-      const rg = ctx.createLinearGradient(0, 0, rayLen, 0);
-      rg.addColorStop(0, `rgba(255,240,120,${rayAlpha * 2})`);
-      rg.addColorStop(0.3, `rgba(200,220,80,${rayAlpha})`);
-      rg.addColorStop(1, 'rgba(100,150,50,0)');
-      ctx.fillStyle = rg;
-      ctx.fillRect(0, -15 - r * 5, rayLen, 30 + r * 10);
-      ctx.restore();
+    // Draw jungle background image, stretched to fill canvas
+    if (jungleBg.complete && jungleBg.naturalWidth > 0) {
+      ctx.drawImage(jungleBg, 0, 0, canvas.width, canvas.height);
+    } else {
+      // Fallback solid color while image loads
+      ctx.fillStyle = '#0d2b0d';
+      ctx.fillRect(0, 0, W, H);
     }
 
-    // Dappled sunlight spots - spread across landscape
-    const sunSpots = [
-      { x: W * 0.08, y: H * 0.15, r: 55 },
-      { x: W * 0.2, y: H * 0.08, r: 70 },
-      { x: W * 0.35, y: H * 0.2, r: 60 },
-      { x: W * 0.5, y: H * 0.1, r: 75 },
-      { x: W * 0.65, y: H * 0.18, r: 50 },
-      { x: W * 0.8, y: H * 0.06, r: 65 },
-      { x: W * 0.92, y: H * 0.14, r: 45 }
-    ];
-    for (const sp of sunSpots) {
-      const pulse = 1 + 0.15 * Math.sin(time * 0.5 + sp.x * 0.01);
-      const sg = ctx.createRadialGradient(sp.x, sp.y, 0, sp.x, sp.y, sp.r * pulse);
-      sg.addColorStop(0, 'rgba(255,240,120,0.08)');
-      sg.addColorStop(0.5, 'rgba(200,220,80,0.04)');
-      sg.addColorStop(1, 'rgba(100,150,50,0)');
-      ctx.fillStyle = sg;
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, sp.r * pulse, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Canopy leaves draping down from TOP edge (wider spread for landscape)
-    function drawCanopyLeaf(lx, ly, leafW, leafH, angle, shade) {
-      ctx.save();
-      ctx.translate(lx, ly);
-      ctx.rotate(angle + Math.sin(time * 0.3 + lx * 0.01) * 0.03);
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.bezierCurveTo(leafW * 0.3, -leafH * 0.4, leafW * 0.8, -leafH * 0.3, leafW, -leafH * 0.1);
-      ctx.bezierCurveTo(leafW * 0.9, leafH * 0.2, leafW * 0.4, leafH * 0.3, 0, 0);
-      ctx.fillStyle = shade;
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(0,40,0,0.3)';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(leafW * 0.5, -leafH * 0.05, leafW * 0.9, -leafH * 0.05);
-      ctx.stroke();
-      ctx.lineWidth = 0.6;
-      ctx.strokeStyle = 'rgba(0,40,0,0.2)';
-      for (let v = 1; v <= 4; v++) {
-        const vx = leafW * v * 0.2;
-        const vy = -leafH * 0.05 * v * 0.15;
-        ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(vx + leafW * 0.12, vy - leafH * 0.15); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(vx + leafW * 0.1, vy + leafH * 0.12); ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    // Top canopy leaves - more leaves spread across wider top edge
-    const canopyLeaves = [
-      { x: -20, y: -5, w: 120, h: 60, a: 0.2, c: 'rgba(10,60,10,0.9)' },
-      { x: W * 0.08, y: -10, w: 140, h: 70, a: -0.1, c: 'rgba(15,70,15,0.85)' },
-      { x: W * 0.18, y: -8, w: 110, h: 55, a: 0.3, c: 'rgba(20,55,10,0.9)' },
-      { x: W * 0.28, y: -12, w: 130, h: 65, a: -0.2, c: 'rgba(12,65,12,0.88)' },
-      { x: W * 0.38, y: -5, w: 120, h: 58, a: 0.15, c: 'rgba(18,50,12,0.92)' },
-      { x: W * 0.48, y: -8, w: 140, h: 68, a: -0.25, c: 'rgba(10,60,10,0.87)' },
-      { x: W * 0.58, y: -6, w: 115, h: 56, a: 0.2, c: 'rgba(15,55,10,0.9)' },
-      { x: W * 0.68, y: -10, w: 130, h: 62, a: -0.15, c: 'rgba(12,65,12,0.86)' },
-      { x: W * 0.78, y: -4, w: 120, h: 58, a: 0.25, c: 'rgba(18,50,12,0.91)' },
-      { x: W * 0.88, y: -9, w: 110, h: 54, a: -0.1, c: 'rgba(10,60,10,0.88)' },
-      { x: W - 40, y: -3, w: 100, h: 50, a: 0.1, c: 'rgba(15,55,10,0.9)' },
-      // Second layer (lighter, overlapping)
-      { x: W * 0.05, y: 5, w: 100, h: 50, a: 0.35, c: 'rgba(25,80,20,0.7)' },
-      { x: W * 0.2, y: 8, w: 90, h: 45, a: -0.3, c: 'rgba(30,85,25,0.65)' },
-      { x: W * 0.35, y: 3, w: 110, h: 52, a: 0.2, c: 'rgba(22,75,18,0.72)' },
-      { x: W * 0.5, y: 6, w: 95, h: 48, a: -0.15, c: 'rgba(28,70,22,0.68)' },
-      { x: W * 0.65, y: 4, w: 105, h: 50, a: 0.25, c: 'rgba(24,78,20,0.7)' },
-      { x: W * 0.82, y: 7, w: 100, h: 46, a: -0.2, c: 'rgba(26,72,22,0.66)' }
-    ];
-    for (const cl of canopyLeaves) {
-      drawCanopyLeaf(cl.x, cl.y, cl.w, cl.h, cl.a, cl.c);
-    }
-
-    // === LAYER 2: Tree trunks along TOP and BOTTOM edges (horizontal for landscape) ===
-
-    // Draw horizontal tree trunk/branch along an edge
-    function drawHorizontalTrunk(tx, ty, trunkLen, trunkH, leavesDown) {
-      // Trunk body - horizontal
-      const tg = ctx.createLinearGradient(tx, ty - trunkH / 2, tx, ty + trunkH / 2);
-      tg.addColorStop(0, '#3d2510');
-      tg.addColorStop(0.3, '#6b4226');
-      tg.addColorStop(0.5, '#7a5030');
-      tg.addColorStop(0.7, '#6b4226');
-      tg.addColorStop(1, '#2d1a08');
-      ctx.fillStyle = tg;
-      ctx.beginPath();
-      ctx.roundRect(tx, ty - trunkH / 2, trunkLen, trunkH, [0, 0, 3, 3]);
-      ctx.fill();
-
-      // Moss patches on trunk
-      ctx.fillStyle = 'rgba(30,70,15,0.4)';
-      for (let m = 0; m < 4; m++) {
-        const mx = tx + m * trunkLen * 0.25 + Math.sin(m * 2.1) * 10;
-        const my = ty + (Math.sin(m * 3.7) * trunkH * 0.2);
-        ctx.beginPath();
-        ctx.ellipse(mx, my, 6 + Math.sin(m * 1.3) * 3, trunkH * 0.3 + Math.sin(m) * 3, 0.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Leaves branching out from trunk
-      const leafDir = leavesDown ? 1 : -1;
-      const trunkLeaves = [
-        { x: tx + trunkLen * 0.1, len: 45, ang: leafDir * 0.8 },
-        { x: tx + trunkLen * 0.3, len: 60, ang: leafDir * 0.5 },
-        { x: tx + trunkLen * 0.6, len: 50, ang: leafDir * 0.9 },
-        { x: tx + trunkLen * 0.85, len: 40, ang: leafDir * 0.6 }
-      ];
-      for (const tl of trunkLeaves) {
-        ctx.save();
-        ctx.translate(tl.x, ty);
-        ctx.rotate(tl.ang);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.bezierCurveTo(tl.len * 0.3, -12, tl.len * 0.7, -8, tl.len, -2);
-        ctx.bezierCurveTo(tl.len * 0.7, 8, tl.len * 0.3, 10, 0, 0);
-        ctx.fillStyle = `rgba(${20 + Math.random() * 20},${60 + Math.random() * 30},${10 + Math.random() * 15},0.7)`;
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,40,0,0.3)';
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(tl.len * 0.9, -1);
-        ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // Top edge trunks (branches growing from top)
-    drawHorizontalTrunk(0, 10, W * 0.35, 22, true);
-    drawHorizontalTrunk(W * 0.4, 5, W * 0.3, 18, true);
-    drawHorizontalTrunk(W * 0.75, 12, W * 0.26, 20, true);
-    // Bottom edge trunks (roots/branches along bottom)
-    drawHorizontalTrunk(0, H - 12, W * 0.3, 20, false);
-    drawHorizontalTrunk(W * 0.35, H - 8, W * 0.35, 24, false);
-    drawHorizontalTrunk(W * 0.72, H - 10, W * 0.29, 18, false);
-
-    // Hanging vines from top edge (more spread for landscape)
-    for (let i = 0; i < 16; i++) {
-      const vx = 20 + i * (W - 40) / 15;
-      const vlen = 40 + Math.sin(i * 1.7) * 30 + 20;
-      const sway = Math.sin(time * 0.6 + i * 1.3) * 10;
-      const sway2 = Math.sin(time * 0.4 + i * 2.1) * 6;
-      ctx.strokeStyle = i % 3 === 0 ? 'rgba(50,30,10,0.35)' : 'rgba(25,65,15,0.3)';
-      ctx.lineWidth = 1.5 + (i % 2);
-      ctx.beginPath();
-      ctx.moveTo(vx, 0);
-      ctx.bezierCurveTo(
-        vx + sway, vlen * 0.3,
-        vx + sway2, vlen * 0.6,
-        vx + sway * 0.7, vlen
-      );
-      ctx.stroke();
-      if (i % 2 === 0) {
-        const leafY = vlen * 0.6;
-        const leafX = vx + sway * 0.5;
-        ctx.fillStyle = 'rgba(30,80,20,0.4)';
-        ctx.save();
-        ctx.translate(leafX, leafY);
-        ctx.rotate(Math.sin(time + i) * 0.2);
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 8, 4, 0.3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-    // === LAYER 3: Ground cover rising from BOTTOM edge ===
-    const groundH = H * 0.12;
-    const groundY = H - groundH;
-    const groundGrad = ctx.createLinearGradient(0, groundY, 0, H);
-    groundGrad.addColorStop(0, '#1a1208');
-    groundGrad.addColorStop(0.3, '#14100a');
-    groundGrad.addColorStop(1, '#0d0a06');
-    ctx.fillStyle = groundGrad;
-    ctx.beginPath();
-    ctx.moveTo(-10, H + 10);
-    ctx.lineTo(-10, groundY + 8);
-    for (let gx = 0; gx <= W; gx += 20) {
-      ctx.lineTo(gx, groundY + Math.sin(gx * 0.04 + 1.5) * 5 + Math.sin(gx * 0.1) * 3);
-    }
-    ctx.lineTo(W + 10, H + 10);
-    ctx.closePath();
-    ctx.fill();
-
-    // Ground texture
-    ctx.fillStyle = 'rgba(40,28,12,0.4)';
-    for (let i = 0; i < 20; i++) {
-      const rx = (i * 67 + 23) % W;
-      const ry = groundY + 10 + (i * 31 % Math.max(1, Math.floor(groundH - 15)));
-      ctx.beginPath();
-      ctx.ellipse(rx, ry, 3 + (i % 3), 1.5, i * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Grass tufts (more spread for wider canvas)
-    ctx.strokeStyle = 'rgba(30,70,15,0.5)';
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < 30; i++) {
-      const gx = (i * W / 30 + 10) % W;
-      const gy = groundY + Math.sin(gx * 0.04 + 1.5) * 5;
-      for (let b = -1; b <= 1; b++) {
-        ctx.beginPath();
-        ctx.moveTo(gx + b * 2, gy);
-        ctx.quadraticCurveTo(gx + b * 4 + Math.sin(time + i) * 2, gy - 10 - Math.abs(b) * 3, gx + b * 6, gy - 14);
-        ctx.stroke();
-      }
-    }
-
-    // Fallen leaves on ground
-    const fallenColors = ['rgba(90,60,10,0.3)', 'rgba(60,80,15,0.25)', 'rgba(100,70,20,0.2)'];
-    for (let i = 0; i < 12; i++) {
-      const fx = (i * W / 12 + 40) % W;
-      const fy = groundY + 5 + (i * 17 % 15);
-      ctx.fillStyle = fallenColors[i % 3];
-      ctx.beginPath();
-      ctx.ellipse(fx, fy, 5, 2.5, i * 0.7, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Mist hugging bottom edge
-    for (let i = 0; i < 6; i++) {
-      const mx = (i * W / 6 + Math.sin(time * 0.15 + i) * 30) % W;
-      const mistGrad = ctx.createRadialGradient(mx, groundY, 0, mx, groundY, 90 + i * 12);
-      mistGrad.addColorStop(0, 'rgba(180,200,180,0.06)');
-      mistGrad.addColorStop(0.5, 'rgba(150,180,150,0.03)');
-      mistGrad.addColorStop(1, 'rgba(100,140,100,0)');
-      ctx.fillStyle = mistGrad;
-      ctx.beginPath();
-      ctx.ellipse(mx, groundY + 5, 110 + i * 15, 25, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Subtle dark overlay for readability of game elements
+    ctx.fillStyle = 'rgba(0, 10, 0, 0.25)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
 
   // Torch/flashlight lighting overlay for jungle
