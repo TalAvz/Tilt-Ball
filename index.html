@@ -21,13 +21,8 @@ html {
   background: #050810;
 }
 body {
-  width: 100dvh;
-  height: 100dvw;
-  transform: rotate(90deg);
-  transform-origin: left top;
-  position: absolute;
-  top: 100%;
-  left: 0;
+  width: 100vw;
+  height: 100dvh;
   overflow: hidden;
   background: #050810;
   touch-action: none;
@@ -319,8 +314,8 @@ canvas {
   // ========== RESIZE ==========
   function resize() {
     dpr = window.devicePixelRatio || 1;
-    W = window.innerHeight;
-    H = window.innerWidth;
+    W = window.innerWidth;
+    H = window.innerHeight;
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
