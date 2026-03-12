@@ -978,16 +978,19 @@ canvas {
       let drawW, drawH, drawX, drawY;
 
       if (imgRatio > canvasRatio) {
-        drawH = canvas.height;
-        drawW = drawH * imgRatio;
-        drawX = (canvas.width - drawW) / 2;
-        drawY = 0;
-      } else {
         drawW = canvas.width;
         drawH = drawW / imgRatio;
         drawX = 0;
         drawY = (canvas.height - drawH) / 2;
+      } else {
+        drawH = canvas.height;
+        drawW = drawH * imgRatio;
+        drawX = (canvas.width - drawW) / 2;
+        drawY = 0;
       }
+      console.log('Canvas:', canvas.width, canvas.height);
+      console.log('Image:', jungleBg.naturalWidth, jungleBg.naturalHeight);
+      console.log('Draw:', drawW, drawH, drawX, drawY);
       ctx.drawImage(jungleBg, drawX, drawY, drawW, drawH);
     } else {
       ctx.fillStyle = '#0d2b0d';
