@@ -339,18 +339,18 @@ canvas {
 
   // ========== RESIZE ==========
   function resize() {
-    dpr = window.devicePixelRatio || 1;
-    // In portrait mode the CSS rotates the body, so swap dimensions
-    if (window.innerWidth < window.innerHeight) {
-      W = window.innerHeight;
-      H = window.innerWidth;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+
+    if (w < h) {
+      // Device is portrait but CSS rotates it to landscape
+      // so swap the dimensions
+      W = canvas.width = h;
+      H = canvas.height = w;
     } else {
-      W = window.innerWidth;
-      H = window.innerHeight;
+      W = canvas.width = w;
+      H = canvas.height = h;
     }
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   window.addEventListener('resize', resize);
   window.addEventListener('orientationchange', resize);
@@ -988,9 +988,6 @@ canvas {
         drawX = (canvas.width - drawW) / 2;
         drawY = 0;
       }
-      console.log('Canvas:', canvas.width, canvas.height);
-      console.log('Image:', jungleBg.naturalWidth, jungleBg.naturalHeight);
-      console.log('Draw:', drawW, drawH, drawX, drawY);
       ctx.drawImage(jungleBg, drawX, drawY, drawW, drawH);
     } else {
       ctx.fillStyle = '#0d2b0d';
