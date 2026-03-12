@@ -375,8 +375,8 @@ canvas {
     if (state !== 'playing') return;
     let gamma = Math.max(-45, Math.min(45, e.gamma || 0));
     let beta = Math.max(-45, Math.min(45, e.beta || 0));
-    tiltX = gamma / 45;
-    tiltY = beta / 45;
+    tiltX = beta / 45;
+    tiltY = -(gamma / 45);
   }
 
   function requestGyroPermission() {
@@ -969,7 +969,23 @@ canvas {
   function drawJungleBackground() {
     // Draw jungle background image, stretched to fill canvas
     if (jungleBg.complete && jungleBg.naturalWidth > 0) {
-      ctx.drawImage(jungleBg, 0, 0, canvas.width, canvas.height);
+      const imgRatio = jungleBg.width / jungleBg.height;
+      const canvasRatio = canvas.width / canvas.height;
+      let drawW, drawH, drawX, drawY;
+
+      if (imgRatio > canvasRatio) {
+        drawH = canvas.height;
+        drawW = drawH * imgRatio;
+        drawX = (canvas.width - drawW) / 2;
+        drawY = 0;
+      } else {
+        drawW = canvas.width;
+        drawH = drawW / imgRatio;
+        drawX = 0;
+        drawY = (canvas.height - drawH) / 2;
+      }
+
+      ctx.drawImage(jungleBg, drawX, drawY, drawW, drawH);
     } else {
       // Fallback solid color while image loads
       ctx.fillStyle = '#0d2b0d';
