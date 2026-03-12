@@ -22,7 +22,7 @@ html {
 }
 body {
   width: 100vw;
-  height: 100dvh;
+  height: 100vh;
   overflow: hidden;
   background: #050810;
   touch-action: none;
@@ -30,62 +30,34 @@ body {
   -webkit-user-select: none;
   user-select: none;
   font-family: 'Orbitron', monospace;
+  position: fixed;
 }
 canvas {
   display: block;
   width: 100%; height: 100%;
 }
-#rotate-overlay {
-  display: none;
-  position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100dvh;
-  background: #050810;
-  z-index: 9999;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
+@media (orientation: portrait) {
+  body {
+    width: 100vh;
+    height: 100vw;
+    transform-origin: bottom left;
+    transform: rotate(-90deg) translateX(-100%);
+    overflow: hidden;
+    position: fixed;
+  }
 }
-#rotate-overlay .phone-icon {
-  width: 64px;
-  height: 100px;
-  border: 4px solid #fff;
-  border-radius: 12px;
-  position: relative;
-  animation: rotatePhone 1.5s ease-in-out infinite;
-}
-#rotate-overlay .phone-icon::after {
-  content: '';
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 16px;
-  height: 16px;
-  border: 2px solid #fff;
-  border-radius: 50%;
-}
-@keyframes rotatePhone {
-  0%, 20% { transform: rotate(0deg); }
-  50%, 70% { transform: rotate(90deg); }
-  100% { transform: rotate(0deg); }
-}
-#rotate-overlay p {
-  color: #fff;
-  font-family: 'Orbitron', monospace;
-  font-size: 18px;
-  text-align: center;
-  padding: 0 20px;
+@media (orientation: landscape) {
+  body {
+    width: 100vw;
+    height: 100vh;
+    transform: none;
+    position: fixed;
+  }
 }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="rotate-overlay">
-  <div class="phone-icon"></div>
-  <p>Rotate your phone to play</p>
-</div>
 <script>
 (() => {
   const canvas = document.getElementById('c');
@@ -361,13 +333,20 @@ canvas {
   // ========== RESIZE ==========
   function resize() {
     dpr = window.devicePixelRatio || 1;
-    W = window.innerWidth;
-    H = window.innerHeight;
+    // In portrait mode the CSS rotates the body, so swap dimensions
+    if (window.innerWidth < window.innerHeight) {
+      W = window.innerHeight;
+      H = window.innerWidth;
+    } else {
+      W = window.innerWidth;
+      H = window.innerHeight;
+    }
     canvas.width = W * dpr;
     canvas.height = H * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   window.addEventListener('resize', resize);
+  window.addEventListener('orientationchange', resize);
   resize();
 
   // ========== GYROSCOPE ==========
@@ -967,9 +946,8 @@ canvas {
 
   // ========== DRAW HELPERS ==========
   function drawJungleBackground() {
-    // Draw jungle background image, stretched to fill canvas
     if (jungleBg.complete && jungleBg.naturalWidth > 0) {
-      const imgRatio = jungleBg.width / jungleBg.height;
+      const imgRatio = jungleBg.naturalWidth / jungleBg.naturalHeight;
       const canvasRatio = canvas.width / canvas.height;
       let drawW, drawH, drawX, drawY;
 
@@ -984,12 +962,10 @@ canvas {
         drawX = 0;
         drawY = (canvas.height - drawH) / 2;
       }
-
       ctx.drawImage(jungleBg, drawX, drawY, drawW, drawH);
     } else {
-      // Fallback solid color while image loads
       ctx.fillStyle = '#0d2b0d';
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     // Subtle dark overlay for readability of game elements
@@ -2770,20 +2746,6 @@ canvas {
     });
     state = 'title';
   }
-  // Portrait mode detection
-  const rotateOverlay = document.getElementById('rotate-overlay');
-  function checkOrientation() {
-    if (window.innerWidth < window.innerHeight) {
-      rotateOverlay.style.display = 'flex';
-      canvas.style.display = 'none';
-    } else {
-      rotateOverlay.style.display = 'none';
-      canvas.style.display = 'block';
-    }
-  }
-  window.addEventListener('orientationchange', checkOrientation);
-  window.addEventListener('resize', checkOrientation);
-  checkOrientation();
 })();
 </script>
 </body>
