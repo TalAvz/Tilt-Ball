@@ -2769,24 +2769,16 @@ canvas {
 
   // Initial state check — use cached permission to skip prompt
   const cachedGyroPermission = localStorage.getItem('gyroPermission');
-  if (typeof DeviceOrientationEvent !== 'undefined' &&
+  if (cachedGyroPermission === 'granted') {
+    // Permission was previously granted — just listen, never call requestPermission()
+    setupGyro();
+    state = 'title';
+  } else if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
-    if (cachedGyroPermission === 'granted') {
-      // iOS device that already granted permission — re-request silently
-      DeviceOrientationEvent.requestPermission().then(response => {
-        if (response === 'granted') {
-          gyroPermGranted = true;
-          hasGyro = true;
-          window.addEventListener('deviceorientation', handleOrientation);
-        } else {
-          localStorage.removeItem('gyroPermission');
-        }
-      }).catch(() => { localStorage.removeItem('gyroPermission'); });
-      state = 'title';
-    } else {
-      state = 'permission';
-    }
+    // iOS device, no cached permission — show permission screen
+    state = 'permission';
   } else {
+    // Non-iOS — no permission needed, auto-grant
     setupGyro();
     localStorage.setItem('gyroPermission', 'granted');
     state = 'title';
