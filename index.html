@@ -414,6 +414,25 @@ canvas {
     gyroPermGranted = true;
   }
 
+  // Must be called from a user gesture (tap) so iOS delivers non-zero gyro values
+  function activateGyro() {
+    if (gyroPermGranted) return; // already activated
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS: silently re-request (no UI shown since iOS remembers the grant)
+      DeviceOrientationEvent.requestPermission().then(response => {
+        if (response === 'granted') {
+          setupGyro();
+          hasGyro = true;
+          saveGyroPermission();
+        }
+      }).catch(() => {});
+    } else {
+      // Non-iOS: just attach the listener
+      setupGyro();
+    }
+  }
+
   function requestGyroPermission() {
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -479,6 +498,7 @@ canvas {
     }
 
     if (state === 'title') {
+      activateGyro();
       state = 'worldSelect';
       return;
     }
@@ -2797,17 +2817,17 @@ canvas {
   requestAnimationFrame(frame);
 
   // Initial state check — use cached permission to skip prompt
+  // NOTE: setupGyro() is NOT called here. It must be called from a user gesture
+  // (tap) so iOS delivers non-zero gyro values. See activateGyro().
   if (isGyroGranted) {
-    // Permission was previously granted — just listen, never call requestPermission()
-    setupGyro();
+    // Permission was previously granted — go straight to title, activate on first tap
     state = 'title';
   } else if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
     // iOS device, no cached permission — show permission screen
     state = 'permission';
   } else {
-    // Non-iOS — no permission needed, auto-grant
-    setupGyro();
+    // Non-iOS — no permission needed, will activate on first tap
     saveGyroPermission();
     state = 'title';
   }
