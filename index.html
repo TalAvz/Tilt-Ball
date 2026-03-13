@@ -392,7 +392,9 @@ canvas {
   }
 
   function setupGyro() {
+    console.log('setupGyro() called');
     window.addEventListener('deviceorientation', (e) => {
+      console.log('gyro event firing', e.gamma, e.beta);
       if (e.gamma !== null) hasGyro = true;
       handleOrientation(e);
     });
@@ -404,10 +406,9 @@ canvas {
         typeof DeviceOrientationEvent.requestPermission === 'function') {
       DeviceOrientationEvent.requestPermission().then(response => {
         if (response === 'granted') {
-          gyroPermGranted = true;
+          setupGyro();
           hasGyro = true;
           saveGyroPermission();
-          window.addEventListener('deviceorientation', handleOrientation);
         }
         state = 'title';
       }).catch(() => { state = 'title'; });
