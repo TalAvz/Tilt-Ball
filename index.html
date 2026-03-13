@@ -450,17 +450,18 @@ canvas {
   }
 
   // ========== HAPTIC FEEDBACK ==========
+  console.log('vibrate supported:', !!navigator.vibrate);
   function vibrateCollect() {
-    try { navigator.vibrate && navigator.vibrate(30); } catch {}
+    if (navigator.vibrate) navigator.vibrate(100);
   }
   function vibrateTrapHit() {
-    try { navigator.vibrate && navigator.vibrate([50, 30, 50]); } catch {}
+    if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
   }
   function vibrateLevelComplete() {
-    try { navigator.vibrate && navigator.vibrate([100, 50, 100, 50, 200]); } catch {}
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 200]);
   }
   function vibrateWallBounce() {
-    try { navigator.vibrate && navigator.vibrate(15); } catch {}
+    if (navigator.vibrate) navigator.vibrate(15);
   }
 
   // ========== FRUIT COLLECTION BURST PARTICLES ==========
@@ -1373,8 +1374,8 @@ canvas {
   // ========== DRAW THEMED SHAPES ==========
   function drawThemedStar(x, y, r, worldIdx, phase, fruitType) {
     const w = WORLDS[worldIdx];
-    // Jungle fruits are much larger
-    const drawR = worldIdx === 0 ? Math.max(r, 24) : r;
+    // Jungle fruits are 30% larger for visibility
+    const drawR = worldIdx === 0 ? Math.max(r * 1.3, 32) : r;
     const time = performance.now() / 1000;
 
     const sg = ctx.createRadialGradient(x, y, 0, x, y, drawR);
@@ -1386,10 +1387,10 @@ canvas {
     ctx.shadowColor = w.starColors[0];
     ctx.shadowBlur = 15 + 5 * Math.sin(phase);
 
-    // Gentle bob animation for jungle fruits
+    // Gentle bob animation for jungle fruits (±6px)
     let bobY = 0;
     if (worldIdx === 0) {
-      bobY = Math.sin(time * 2.5 + phase) * 3;
+      bobY = Math.sin(time * 2.5 + phase) * 6;
     }
 
     switch (w.starShape) {
@@ -1397,11 +1398,21 @@ canvas {
         const ft = (typeof fruitType === 'number') ? fruitType : 0;
         const fy = y + bobY;
 
-        // Drop shadow for all fruits
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        // Bright circular background for visibility
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.beginPath();
+        ctx.arc(x, fy, drawR + 8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Strong drop shadow
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath();
         ctx.ellipse(x + 2, fy + drawR * 0.6, drawR * 0.5, drawR * 0.15, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
 
         // Warm glow underneath
         const glowGrad = ctx.createRadialGradient(x, fy + drawR * 0.3, 0, x, fy + drawR * 0.3, drawR * 0.8);
@@ -1439,9 +1450,9 @@ canvas {
           bg.addColorStop(1, '#c8a810');
           ctx.fillStyle = bg;
           ctx.fill();
-          // Darker edges
-          ctx.strokeStyle = 'rgba(150,120,20,0.3)';
-          ctx.lineWidth = 1;
+          // Bright outline for visibility
+          ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+          ctx.lineWidth = 2;
           ctx.stroke();
           // Brown tip top
           ctx.beginPath();
@@ -1471,6 +1482,10 @@ canvas {
           mg.addColorStop(1, '#E08000');
           ctx.fillStyle = mg;
           ctx.fill();
+          // Bright outline for visibility
+          ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
           // Mango skin color variation
           ctx.beginPath();
           ctx.ellipse(x + drawR * 0.15, fy + drawR * 0.2, drawR * 0.35, drawR * 0.45, 0.2, 0, Math.PI * 2);
@@ -1516,6 +1531,10 @@ canvas {
           pg.addColorStop(1, '#B8860B');
           ctx.fillStyle = pg;
           ctx.fill();
+          // Bright outline for visibility
+          ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
 
           // Diamond grid pattern
           ctx.strokeStyle = 'rgba(139,80,10,0.45)';
@@ -1681,289 +1700,435 @@ canvas {
 
       case 'jungleCreature': {
         const ct = t.creatureType || 0;
+        // 1.5x size for all traps
+        const S = size * 1.5;
+        // Bounce animation
+        const bounceY = Math.sin(time * 3 + phase) * 3;
+        ctx.translate(0, bounceY);
+
+        // Red warning glow when ball is close
+        const distToBall = Math.sqrt((t.x - ball.x) ** 2 + (t.y - ball.y) ** 2);
+        if (distToBall < 80) {
+          const warnAlpha = (1 - distToBall / 80) * 0.4;
+          ctx.shadowColor = `rgba(255, 0, 0, ${warnAlpha})`;
+          ctx.shadowBlur = 25;
+        }
+
+        // Drop shadow for all traps
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(3, S * 0.5, S * 0.6, S * 0.12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.shadowColor = 'transparent';
+
         if (ct === 0) {
-          // SNAKE - thick body, diamond pattern, triangular head, forked tongue
+          // === CARTOON SNAKE ===
           ctx.rotate(-wobble);
           const segments = 10;
-          const segW = size * 0.42;
+          const segW = S * 0.42;
 
-          // Compute snake positions along sine wave
+          // Compute snake positions along exaggerated sine wave
           const pts = [];
           for (let i = 0; i < segments; i++) {
             pts.push({
               x: (i - segments / 2) * segW * 0.75,
-              y: Math.sin(time * 3.5 + i * 0.7 + phase) * size * 0.45
+              y: Math.sin(time * 3.5 + i * 0.7 + phase) * S * 0.5
             });
           }
 
-          // Draw body segments (thick, 8px style)
+          // Belly (lighter underside drawn first)
           for (let i = segments - 1; i >= 1; i--) {
             const s = pts[i];
-            const thickness = segW * (0.32 + 0.06 * Math.sin(i * 0.7));
-            // Base green body
+            const thickness = 5 + (segments - i) * 0.3;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y + 1, thickness, 0, Math.PI * 2);
+            ctx.fillStyle = '#B8E6A0';
+            ctx.fill();
+          }
+
+          // Body segments — bright lime green with dark spots
+          for (let i = segments - 1; i >= 1; i--) {
+            const s = pts[i];
+            const thickness = 5 + (segments - i) * 0.3;
             ctx.beginPath();
             ctx.arc(s.x, s.y, thickness, 0, Math.PI * 2);
-            ctx.fillStyle = i % 2 === 0 ? '#2a9a2a' : '#35b535';
+            ctx.fillStyle = '#7BC67E';
             ctx.fill();
-            // Darker diamond pattern on back
+            // Dark outline
+            ctx.strokeStyle = '#2A6B2A';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Darker green oval spots on every other segment
             if (i % 2 === 0 && i > 0 && i < segments - 1) {
-              ctx.save();
-              ctx.translate(s.x, s.y);
-              const ang = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x);
-              ctx.rotate(ang);
               ctx.beginPath();
-              ctx.moveTo(0, -thickness * 0.6);
-              ctx.lineTo(thickness * 0.5, 0);
-              ctx.lineTo(0, thickness * 0.6);
-              ctx.lineTo(-thickness * 0.5, 0);
-              ctx.closePath();
-              ctx.fillStyle = 'rgba(15,80,15,0.5)';
+              ctx.ellipse(s.x, s.y - 1, thickness * 0.5, thickness * 0.35, 0, 0, Math.PI * 2);
+              ctx.fillStyle = '#4A9E4A';
               ctx.fill();
-              ctx.restore();
             }
           }
 
-          // Triangular head (first point)
+          // Large round cartoon head
           const head = pts[0];
           const neck = pts[1];
           const headAngle = Math.atan2(head.y - neck.y, head.x - neck.x);
           ctx.save();
           ctx.translate(head.x, head.y);
           ctx.rotate(headAngle);
-          // Head triangle
-          ctx.beginPath();
-          ctx.moveTo(segW * 0.5, 0);
-          ctx.lineTo(-segW * 0.2, -segW * 0.35);
-          ctx.lineTo(-segW * 0.2, segW * 0.35);
-          ctx.closePath();
-          ctx.fillStyle = '#1a7a1a';
-          ctx.fill();
 
-          // Yellow eyes with slit pupils
-          ctx.fillStyle = '#ffdd00';
+          // Head circle
           ctx.beginPath();
-          ctx.ellipse(segW * 0.1, -segW * 0.2, 3.5, 4, 0, 0, Math.PI * 2);
+          ctx.arc(0, 0, 12, 0, Math.PI * 2);
+          ctx.fillStyle = '#7BC67E';
           ctx.fill();
-          ctx.beginPath();
-          ctx.ellipse(segW * 0.1, segW * 0.2, 3.5, 4, 0, 0, Math.PI * 2);
-          ctx.fill();
-          // Vertical slit pupils
-          ctx.fillStyle = '#000';
-          ctx.beginPath();
-          ctx.ellipse(segW * 0.1, -segW * 0.2, 1.2, 3.5, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.ellipse(segW * 0.1, segW * 0.2, 1.2, 3.5, 0, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.strokeStyle = '#2A6B2A';
+          ctx.lineWidth = 2;
+          ctx.stroke();
 
-          // Forked red tongue (flickering)
-          const tongueLen = segW * 0.5 * (0.8 + 0.4 * Math.sin(time * 8 + phase));
-          ctx.strokeStyle = '#dd2222';
+          // Big grin (curved white teeth)
+          ctx.beginPath();
+          ctx.arc(4, 2, 7, -0.3, Math.PI * 0.6);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          // Individual teeth
+          ctx.fillStyle = '#fff';
+          for (let ti = 0; ti < 3; ti++) {
+            const ta = -0.1 + ti * 0.3;
+            ctx.beginPath();
+            ctx.arc(4 + Math.cos(ta) * 6, 2 + Math.sin(ta) * 6, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Huge round eyes
+          // Left eye
+          ctx.beginPath();
+          ctx.arc(-2, -7, 5, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.strokeStyle = '#2A6B2A';
           ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(segW * 0.45, 0);
-          ctx.lineTo(segW * 0.45 + tongueLen, 0);
           ctx.stroke();
+          // Yellow iris
           ctx.beginPath();
-          ctx.moveTo(segW * 0.45 + tongueLen * 0.7, 0);
-          ctx.lineTo(segW * 0.45 + tongueLen, -4);
-          ctx.moveTo(segW * 0.45 + tongueLen * 0.7, 0);
-          ctx.lineTo(segW * 0.45 + tongueLen, 4);
-          ctx.stroke();
-          ctx.restore();
-
-        } else if (ct === 1) {
-          // CROCODILE - long body, bumpy ridge, visible teeth, red eyes
-          const S = size;
-          // Body - slightly rounded green rectangle
-          const bodyGrad = ctx.createLinearGradient(0, -S * 0.35, 0, S * 0.35);
-          bodyGrad.addColorStop(0, '#2a5a1a');
-          bodyGrad.addColorStop(0.3, '#3a7a2a');
-          bodyGrad.addColorStop(0.7, '#3a7a2a');
-          bodyGrad.addColorStop(1, '#2a5a1a');
-          ctx.fillStyle = bodyGrad;
-          ctx.beginPath();
-          ctx.roundRect(-S * 1.2, -S * 0.3, S * 2.4, S * 0.6, 6);
+          ctx.arc(-2, -7, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#FFE033';
           ctx.fill();
-
-          // Darker bumpy ridge along back (series of small triangles)
-          ctx.fillStyle = '#1a4a10';
-          for (let i = 0; i < 8; i++) {
-            const rx = -S * 0.8 + i * S * 0.25;
-            ctx.beginPath();
-            ctx.moveTo(rx - 4, -S * 0.28);
-            ctx.lineTo(rx, -S * 0.42);
-            ctx.lineTo(rx + 4, -S * 0.28);
-            ctx.closePath();
-            ctx.fill();
-          }
-
-          // Head slightly wider
-          ctx.fillStyle = '#3a7a2a';
+          // Black pupil
           ctx.beginPath();
-          ctx.roundRect(-S * 1.5, -S * 0.35, S * 0.45, S * 0.7, [8, 2, 2, 8]);
-          ctx.fill();
-
-          // Teeth visible (white zigzag at jaw)
-          ctx.fillStyle = '#f0f0e8';
-          for (let i = 0; i < 5; i++) {
-            const tx2 = -S * 1.5 + i * S * 0.09;
-            // Top teeth
-            ctx.beginPath();
-            ctx.moveTo(tx2, -S * 0.08);
-            ctx.lineTo(tx2 + S * 0.045, S * 0.06);
-            ctx.lineTo(tx2 + S * 0.09, -S * 0.08);
-            ctx.fill();
-            // Bottom teeth
-            ctx.beginPath();
-            ctx.moveTo(tx2, S * 0.08);
-            ctx.lineTo(tx2 + S * 0.045, -S * 0.04);
-            ctx.lineTo(tx2 + S * 0.09, S * 0.08);
-            ctx.fill();
-          }
-
-          // Small red eyes
-          ctx.fillStyle = '#cc2200';
-          ctx.beginPath();
-          ctx.arc(-S * 1.15, -S * 0.2, 3, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.arc(-1.5, -7, 2, 0, Math.PI * 2);
           ctx.fillStyle = '#000';
+          ctx.fill();
+          // White shine
           ctx.beginPath();
-          ctx.arc(-S * 1.15, -S * 0.2, 1.5, 0, Math.PI * 2);
+          ctx.arc(-3, -8.5, 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
           ctx.fill();
 
-          // Nostril
-          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          // Right eye
           ctx.beginPath();
-          ctx.ellipse(-S * 1.42, -S * 0.15, 2, 1.5, 0, 0, Math.PI * 2);
+          ctx.arc(4, -7, 5, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.strokeStyle = '#2A6B2A';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(4, -7, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#FFE033';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(4.5, -7, 2, 0, Math.PI * 2);
+          ctx.fillStyle = '#000';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(3, -8.5, 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
           ctx.fill();
 
-          // Tail with sine wave
-          ctx.strokeStyle = '#3a7a2a';
-          ctx.lineWidth = S * 0.28;
+          // Forked red tongue (animated flick)
+          const tongueLen = 12 * (0.6 + 0.6 * Math.sin(time * 8 + phase));
+          ctx.strokeStyle = '#EE3333';
+          ctx.lineWidth = 2;
           ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.moveTo(S * 1.0, 0);
-          ctx.bezierCurveTo(
-            S * 1.3, Math.sin(time * 2.5 + phase) * S * 0.35,
-            S * 1.5, Math.sin(time * 2.5 + phase + 1) * S * 0.25,
-            S * 1.6, Math.sin(time * 2.5 + phase + 2) * S * 0.15
-          );
+          ctx.moveTo(10, 1);
+          ctx.lineTo(10 + tongueLen, 1);
+          ctx.stroke();
+          // Fork
+          ctx.beginPath();
+          ctx.moveTo(10 + tongueLen * 0.7, 1);
+          ctx.lineTo(10 + tongueLen, -3);
+          ctx.moveTo(10 + tongueLen * 0.7, 1);
+          ctx.lineTo(10 + tongueLen, 5);
           ctx.stroke();
           ctx.lineCap = 'butt';
 
-          // Belly texture
-          ctx.fillStyle = 'rgba(80,120,50,0.2)';
+          ctx.restore();
+
+        } else if (ct === 1) {
+          // === CARTOON CROCODILE ===
+          // Slow wobble up and down
+          const crocBob = Math.sin(time * 2 + phase) * 2;
+          ctx.translate(0, crocBob);
+
+          // Tail with sine wave
+          ctx.strokeStyle = '#5B8C3E';
+          ctx.lineWidth = S * 0.3;
+          ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.roundRect(-S * 0.8, S * 0.05, S * 1.6, S * 0.18, 3);
+          ctx.moveTo(S * 0.9, 0);
+          ctx.bezierCurveTo(
+            S * 1.2, Math.sin(time * 2.5 + phase) * S * 0.35,
+            S * 1.4, Math.sin(time * 2.5 + phase + 1) * S * 0.25,
+            S * 1.5, Math.sin(time * 2.5 + phase + 2) * S * 0.2
+          );
+          ctx.stroke();
+          // Tail outline
+          ctx.strokeStyle = '#2D4A1A';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(S * 0.9, -S * 0.13);
+          ctx.bezierCurveTo(S * 1.2, Math.sin(time * 2.5 + phase) * S * 0.35 - S * 0.1, S * 1.4, Math.sin(time * 2.5 + phase + 1) * S * 0.25, S * 1.5, Math.sin(time * 2.5 + phase + 2) * S * 0.2);
+          ctx.stroke();
+          ctx.lineCap = 'butt';
+
+          // Short stubby legs (4 rounded rectangles)
+          ctx.fillStyle = '#5B8C3E';
+          ctx.strokeStyle = '#2D4A1A';
+          ctx.lineWidth = 2;
+          const legPositions = [
+            [-S * 0.5, S * 0.25], [S * 0.3, S * 0.25],
+            [-S * 0.5, -S * 0.25], [S * 0.3, -S * 0.25]
+          ];
+          for (const [lx, ly] of legPositions) {
+            ctx.beginPath();
+            ctx.roundRect(lx - S * 0.08, ly, S * 0.16, S * 0.15, 4);
+            ctx.fill();
+            ctx.stroke();
+          }
+
+          // Wide flat body
+          const bodyGrad = ctx.createLinearGradient(0, -S * 0.3, 0, S * 0.3);
+          bodyGrad.addColorStop(0, '#3D6B2A');
+          bodyGrad.addColorStop(0.4, '#5B8C3E');
+          bodyGrad.addColorStop(0.8, '#5B8C3E');
+          bodyGrad.addColorStop(1, '#7AAC5E');
+          ctx.fillStyle = bodyGrad;
+          ctx.beginPath();
+          ctx.roundRect(-S * 1.0, -S * 0.25, S * 2.0, S * 0.5, 10);
+          ctx.fill();
+          ctx.strokeStyle = '#2D4A1A';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          // Darker bumpy ridge (rounded humps, not triangles)
+          ctx.fillStyle = '#3D6B2A';
+          for (let i = 0; i < 6; i++) {
+            const rx = -S * 0.6 + i * S * 0.28;
+            ctx.beginPath();
+            ctx.arc(rx, -S * 0.25, S * 0.06, Math.PI, 0);
+            ctx.fill();
+            ctx.strokeStyle = '#2D4A1A';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+
+          // Belly (lighter)
+          ctx.fillStyle = 'rgba(180,210,140,0.3)';
+          ctx.beginPath();
+          ctx.roundRect(-S * 0.7, S * 0.0, S * 1.4, S * 0.15, 4);
           ctx.fill();
 
-          // Legs (small stubs)
-          ctx.fillStyle = '#2a5a1a';
+          // Large wide head
+          ctx.fillStyle = '#5B8C3E';
           ctx.beginPath();
-          ctx.ellipse(-S * 0.5, S * 0.35, S * 0.12, S * 0.08, 0.2, 0, Math.PI * 2);
+          ctx.roundRect(-S * 1.4, -S * 0.3, S * 0.55, S * 0.6, [12, 4, 4, 12]);
+          ctx.fill();
+          ctx.strokeStyle = '#2D4A1A';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          // Enormous toothy grin — alternating white rectangles
+          ctx.fillStyle = '#fff';
+          const jawX = -S * 1.4;
+          // Top teeth
+          for (let i = 0; i < 5; i++) {
+            ctx.fillRect(jawX + i * S * 0.1 + S * 0.02, -S * 0.06, S * 0.06, S * 0.1);
+          }
+          // Bottom teeth
+          for (let i = 0; i < 5; i++) {
+            ctx.fillRect(jawX + i * S * 0.1 + S * 0.06, -S * 0.02, S * 0.06, S * 0.1);
+          }
+
+          // Big bulging eyes on top
+          // Left eye
+          ctx.beginPath();
+          ctx.arc(-S * 1.1, -S * 0.38, S * 0.12, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.strokeStyle = '#2D4A1A';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          // Green iris
+          ctx.beginPath();
+          ctx.arc(-S * 1.1, -S * 0.38, S * 0.08, 0, Math.PI * 2);
+          ctx.fillStyle = '#4A9E4A';
+          ctx.fill();
+          // Black pupil
+          ctx.beginPath();
+          ctx.arc(-S * 1.08, -S * 0.38, S * 0.04, 0, Math.PI * 2);
+          ctx.fillStyle = '#000';
+          ctx.fill();
+          // Shine
+          ctx.beginPath();
+          ctx.arc(-S * 1.14, -S * 0.42, S * 0.025, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+
+          // Right eye
+          ctx.beginPath();
+          ctx.arc(-S * 0.95, -S * 0.38, S * 0.12, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+          ctx.strokeStyle = '#2D4A1A';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(-S * 0.95, -S * 0.38, S * 0.08, 0, Math.PI * 2);
+          ctx.fillStyle = '#4A9E4A';
           ctx.fill();
           ctx.beginPath();
-          ctx.ellipse(S * 0.4, S * 0.35, S * 0.12, S * 0.08, -0.2, 0, Math.PI * 2);
+          ctx.arc(-S * 0.93, -S * 0.38, S * 0.04, 0, Math.PI * 2);
+          ctx.fillStyle = '#000';
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(-S * 0.99, -S * 0.42, S * 0.025, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff';
+          ctx.fill();
+
+          // Nostrils
+          ctx.fillStyle = '#2D4A1A';
+          ctx.beginPath();
+          ctx.ellipse(-S * 1.35, -S * 0.12, 2.5, 2, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(-S * 1.35, S * 0.08, 2.5, 2, 0, 0, Math.PI * 2);
           ctx.fill();
 
         } else {
-          // SPIDER - large black body, 8 thick jointed legs, red hourglass, silk thread
-          const S = size;
+          // === CARTOON SPIDER ===
+          // Bounce animation
+          const spiderBounce = Math.sin(time * 4 + phase) * 4;
+          ctx.translate(0, spiderBounce);
 
-          // Silk thread from top of screen
-          ctx.strokeStyle = 'rgba(200,200,200,0.25)';
-          ctx.lineWidth = 1;
+          // Silk thread from top
+          ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
-          ctx.moveTo(0, -S * 0.4);
-          // Convert to screen coords for thread to top
-          ctx.lineTo(0, -(y + S * 0.4));
+          ctx.moveTo(0, -S * 0.35);
+          ctx.lineTo(0, -(y + S * 0.35));
           ctx.stroke();
 
-          // Brown head (cephalothorax)
-          ctx.fillStyle = '#3a2a1a';
-          ctx.beginPath();
-          ctx.ellipse(0, -S * 0.15, S * 0.3, S * 0.25, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Large black oval abdomen
-          ctx.fillStyle = '#111';
-          ctx.beginPath();
-          ctx.ellipse(0, S * 0.25, S * 0.35, S * 0.4, 0, 0, Math.PI * 2);
-          ctx.fill();
-          // Abdomen sheen
-          const abdSheen = ctx.createRadialGradient(-S * 0.08, S * 0.15, 0, 0, S * 0.25, S * 0.35);
-          abdSheen.addColorStop(0, 'rgba(60,60,60,0.3)');
-          abdSheen.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = abdSheen;
-          ctx.beginPath();
-          ctx.ellipse(0, S * 0.25, S * 0.35, S * 0.4, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Red hourglass marking
-          ctx.fillStyle = '#cc1100';
-          ctx.beginPath();
-          ctx.moveTo(0, S * 0.1);
-          ctx.lineTo(-S * 0.08, S * 0.2);
-          ctx.lineTo(0, S * 0.25);
-          ctx.lineTo(S * 0.08, S * 0.2);
-          ctx.closePath();
-          ctx.fill();
-          ctx.beginPath();
-          ctx.moveTo(0, S * 0.25);
-          ctx.lineTo(-S * 0.08, S * 0.35);
-          ctx.lineTo(0, S * 0.4);
-          ctx.lineTo(S * 0.08, S * 0.35);
-          ctx.closePath();
-          ctx.fill();
-
-          // 8 thick legs with joints (bent in middle)
+          // 8 thick jointed legs
           ctx.strokeStyle = '#1a1a1a';
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 4;
           ctx.lineCap = 'round';
           const legSway = Math.sin(time * 3 + phase) * 0.15;
           for (let i = 0; i < 8; i++) {
             const side = i < 4 ? -1 : 1;
             const idx = i % 4;
-            const baseAng = (-0.6 - idx * 0.35) + legSway * (idx % 2 === 0 ? 1 : -1);
-            const legLen = S * (0.7 + idx * 0.1);
-            // Body attachment point
-            const ax = side * S * 0.2;
-            const ay = -S * 0.15 + idx * S * 0.06;
-            // Knee (bent upward)
+            const baseAng = (-0.5 - idx * 0.3) + legSway * (idx % 2 === 0 ? 1 : -1);
+            const legLen = S * (0.8 + idx * 0.12);
+            const ax = side * S * 0.22;
+            const ay = -S * 0.1 + idx * S * 0.07;
+            // Upper segment goes outward
             const kneeAng = baseAng + side * 0.3;
             const kneeX = ax + Math.cos(kneeAng) * legLen * 0.5 * side;
-            const kneeY = ay + Math.sin(kneeAng) * legLen * 0.5 - S * 0.25;
-            // Foot
+            const kneeY = ay + Math.sin(kneeAng) * legLen * 0.5 - S * 0.3;
+            // Lower segment goes down
             const footX = kneeX + Math.cos(kneeAng + 1.2 * side) * legLen * 0.55 * side;
-            const footY = kneeY + Math.abs(Math.sin(kneeAng + 1.2)) * legLen * 0.55 + S * 0.15;
+            const footY = kneeY + Math.abs(Math.sin(kneeAng + 1.2)) * legLen * 0.55 + S * 0.2;
             ctx.beginPath();
             ctx.moveTo(ax, ay);
             ctx.lineTo(kneeX, kneeY);
             ctx.lineTo(footX, footY);
             ctx.stroke();
+            // Rounded end on foot
+            ctx.beginPath();
+            ctx.arc(footX, footY, 2.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fill();
           }
           ctx.lineCap = 'butt';
 
-          // 8 tiny red eyes (two rows)
-          ctx.fillStyle = '#ff2200';
-          const eyeRow1 = [-3, -1, 1, 3];
-          const eyeRow2 = [-2, 2];
-          for (const ex of eyeRow1) {
+          // Smaller brown head (cephalothorax)
+          ctx.beginPath();
+          ctx.ellipse(0, -S * 0.18, S * 0.28, S * 0.22, 0, 0, Math.PI * 2);
+          ctx.fillStyle = '#5A3A2A';
+          ctx.fill();
+          ctx.strokeStyle = '#2D1B14';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Large round abdomen with purple sheen
+          const abdGrad = ctx.createRadialGradient(-S * 0.08, S * 0.18, 0, 0, S * 0.25, S * 0.45);
+          abdGrad.addColorStop(0, '#3D2B5E');
+          abdGrad.addColorStop(0.5, '#1a1a1a');
+          abdGrad.addColorStop(1, '#0a0a0a');
+          ctx.beginPath();
+          ctx.ellipse(0, S * 0.28, S * 0.4, S * 0.45, 0, 0, Math.PI * 2);
+          ctx.fillStyle = abdGrad;
+          ctx.fill();
+          ctx.strokeStyle = '#2D1B4E';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          // Red hourglass on belly
+          ctx.fillStyle = '#EE2200';
+          ctx.beginPath();
+          ctx.moveTo(0, S * 0.12);
+          ctx.lineTo(-S * 0.1, S * 0.24);
+          ctx.lineTo(0, S * 0.3);
+          ctx.lineTo(S * 0.1, S * 0.24);
+          ctx.closePath();
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(0, S * 0.3);
+          ctx.lineTo(-S * 0.1, S * 0.42);
+          ctx.lineTo(0, S * 0.48);
+          ctx.lineTo(S * 0.1, S * 0.42);
+          ctx.closePath();
+          ctx.fill();
+
+          // 6 small round eyes arranged in pattern
+          const eyePositions = [
+            [-S * 0.08, -S * 0.32, 3.5],
+            [S * 0.08, -S * 0.32, 3.5],
+            [-S * 0.15, -S * 0.26, 2.5],
+            [S * 0.15, -S * 0.26, 2.5],
+            [-S * 0.05, -S * 0.24, 2],
+            [S * 0.05, -S * 0.24, 2]
+          ];
+          for (const [ex, ey, er] of eyePositions) {
+            // White circle
             ctx.beginPath();
-            ctx.arc(ex * 1.5, -S * 0.3, 1.5, 0, Math.PI * 2);
+            ctx.arc(ex, ey, er, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
             ctx.fill();
-          }
-          for (const ex of eyeRow2) {
+            ctx.strokeStyle = '#2D1B14';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            // Red pupil
             ctx.beginPath();
-            ctx.arc(ex * 2, -S * 0.22, 1.2, 0, Math.PI * 2);
+            ctx.arc(ex + 0.5, ey, er * 0.55, 0, Math.PI * 2);
+            ctx.fillStyle = '#CC0000';
             ctx.fill();
-          }
-          // Small eye glints
-          ctx.fillStyle = 'rgba(255,100,80,0.5)';
-          for (const ex of eyeRow1) {
+            // Tiny shine
             ctx.beginPath();
-            ctx.arc(ex * 1.5 - 0.5, -S * 0.31, 0.5, 0, Math.PI * 2);
+            ctx.arc(ex - er * 0.25, ey - er * 0.3, er * 0.25, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff';
             ctx.fill();
           }
         }
@@ -3097,27 +3262,28 @@ canvas {
       ctx.globalAlpha = 1;
     }
 
-    // Speed lines (before ball)
+    // Speed lines (before ball) — short, clean streaks close to ball
     const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-    if (ballSpeed > 8) {
-      const lineCount = Math.floor(ballSpeed / 2);
-      for (let i = 0; i < lineCount; i++) {
-        const sAngle = Math.atan2(ball.vy, ball.vx) + Math.PI;
-        const spread = (Math.random() - 0.5) * 0.6;
-        const len = ballSpeed * (3 + Math.random() * 4);
-        const startDist = BALL_RADIUS + Math.random() * 5;
+    if (ballSpeed > 6) {
+      const slAngle = Math.atan2(ball.vy, ball.vx) + Math.PI;
+      const slCount = 4;
+      for (let i = 0; i < slCount; i++) {
+        const spread = (i - slCount / 2) * 0.18;
+        const lineLen = 15 + Math.random() * 10; // 15-25px max
+        const startDist = BALL_RADIUS + 2;
+        const alpha = 0.15 + (ballSpeed / 30) * 0.25;
 
         ctx.beginPath();
         ctx.moveTo(
-          ball.x + Math.cos(sAngle + spread) * startDist,
-          ball.y + Math.sin(sAngle + spread) * startDist
+          ball.x + Math.cos(slAngle + spread) * startDist,
+          ball.y + Math.sin(slAngle + spread) * startDist
         );
         ctx.lineTo(
-          ball.x + Math.cos(sAngle + spread) * (startDist + len),
-          ball.y + Math.sin(sAngle + spread) * (startDist + len)
+          ball.x + Math.cos(slAngle + spread) * (startDist + lineLen),
+          ball.y + Math.sin(slAngle + spread) * (startDist + lineLen)
         );
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 + Math.random() * 0.2})`;
-        ctx.lineWidth = 0.5 + Math.random();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.lineWidth = 1;
         ctx.stroke();
       }
     }
