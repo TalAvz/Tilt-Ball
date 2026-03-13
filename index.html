@@ -223,7 +223,7 @@ canvas {
 
   // ========== STATE ==========
   let W, H, dpr;
-  // states: permission, title, worldSelect, levelSelect, playing, levelComplete, gameover
+  // states: permission, title, worldSelect, levelSelect, levelIntro, playing, levelComplete, gameover
   let state = 'permission';
   let score = 0;
   let combo = 1;
@@ -336,6 +336,264 @@ canvas {
       osc.stop(audioCtx.currentTime + 0.8);
       noteIdx = (noteIdx + 1) % (w.musicScale.length * 2);
     }, 600 + worldIdx * 100);
+  }
+
+  // Enhanced audio functions for jungle polish
+  function playCollectSoundEnhanced(comboLevel) {
+    if (!audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.frequency.setValueAtTime(400 + comboLevel * 80, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(
+        800 + comboLevel * 100, audioCtx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.2);
+    } catch {}
+  }
+
+  function playTrapHitSound() {
+    if (!audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.3);
+      gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.3);
+    } catch {}
+  }
+
+  function playLevelCompleteSound() {
+    if (!audioCtx) return;
+    try {
+      const notes = [400, 500, 600, 800];
+      notes.forEach((freq, i) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime + i * 0.12);
+        gain.gain.exponentialRampToValueAtTime(
+          0.001, audioCtx.currentTime + i * 0.12 + 0.3);
+        osc.start(audioCtx.currentTime + i * 0.12);
+        osc.stop(audioCtx.currentTime + i * 0.12 + 0.3);
+      });
+    } catch {}
+  }
+
+  function playComboSound(level) {
+    if (!audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.frequency.setValueAtTime(600 + level * 100, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(
+        1200 + level * 150, audioCtx.currentTime + 0.15);
+      gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.25);
+    } catch {}
+  }
+
+  let ambientStarted = false;
+  function startAmbient() {
+    if (!audioCtx || ambientStarted) return;
+    ambientStarted = true;
+    try {
+      // Low jungle hum
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 60;
+      gain.gain.value = 0.04;
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start();
+
+      // Random bird chirps every 3-7 seconds
+      function chirp() {
+        if (!audioCtx) return;
+        try {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = 'sine';
+          o.connect(g);
+          g.connect(masterGain);
+          o.frequency.setValueAtTime(1200 + Math.random() * 800,
+            audioCtx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(
+            800 + Math.random() * 400, audioCtx.currentTime + 0.1);
+          g.gain.setValueAtTime(0.08, audioCtx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+          o.start();
+          o.stop(audioCtx.currentTime + 0.15);
+        } catch {}
+        setTimeout(chirp, 3000 + Math.random() * 4000);
+      }
+      chirp();
+    } catch {}
+  }
+
+  // ========== HAPTIC FEEDBACK ==========
+  function vibrateCollect() {
+    try { navigator.vibrate && navigator.vibrate(30); } catch {}
+  }
+  function vibrateTrapHit() {
+    try { navigator.vibrate && navigator.vibrate([50, 30, 50]); } catch {}
+  }
+  function vibrateLevelComplete() {
+    try { navigator.vibrate && navigator.vibrate([100, 50, 100, 50, 200]); } catch {}
+  }
+  function vibrateWallBounce() {
+    try { navigator.vibrate && navigator.vibrate(15); } catch {}
+  }
+
+  // ========== FRUIT COLLECTION BURST PARTICLES ==========
+  let burstParticles = [];
+
+  function spawnCollectionBurst(x, y) {
+    const count = 12 + Math.floor(Math.random() * 5);
+    const colors = ['#FFD166', '#FFD166', '#06D6A0', '#06D6A0', '#ffffff'];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2 + Math.random() * 4;
+      const isLeaf = Math.random() > 0.5;
+      burstParticles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 3 + Math.random() * 5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        lifetime: 600,
+        age: 0,
+        isLeaf,
+        rotation: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  // Fruit pop animation tracking
+  let fruitPopAnims = [];
+
+  function addFruitPop(x, y, fruitType) {
+    fruitPopAnims.push({ x, y, fruitType, startTime: performance.now(), duration: 200 });
+  }
+
+  // ========== LEVEL INTRO ANIMATION ==========
+  let levelIntroActive = false;
+  let levelIntroStartTime = 0;
+  let levelIntroCallback = null;
+  const LEVEL_INTRO_DURATION = 2500;
+
+  function showLevelIntro(worldName, levelNum, callback) {
+    levelIntroActive = true;
+    levelIntroStartTime = performance.now();
+    levelIntroCallback = callback;
+  }
+
+  function updateLevelIntro() {
+    if (!levelIntroActive) return false;
+    const elapsed = performance.now() - levelIntroStartTime;
+    if (elapsed >= LEVEL_INTRO_DURATION) {
+      levelIntroActive = false;
+      if (levelIntroCallback) levelIntroCallback();
+      levelIntroCallback = null;
+      return false;
+    }
+    return true;
+  }
+
+  function drawLevelIntro() {
+    if (!levelIntroActive) return;
+    const elapsed = performance.now() - levelIntroStartTime;
+    const t = elapsed / LEVEL_INTRO_DURATION;
+
+    // Overlay alpha: fade in 0-0.12, hold, fade out 0.8-1.0
+    let overlayAlpha;
+    if (t < 0.12) {
+      overlayAlpha = (t / 0.12) * 0.92;
+    } else if (t > 0.8) {
+      overlayAlpha = (1 - (t - 0.8) / 0.2) * 0.92;
+    } else {
+      overlayAlpha = 0.92;
+    }
+
+    // Background with jungle-green tint
+    ctx.fillStyle = `rgba(0, 5, 0, ${overlayAlpha})`;
+    ctx.fillRect(0, 0, W, H);
+
+    // Content alpha (visible during hold period)
+    let contentAlpha;
+    if (t < 0.12) {
+      contentAlpha = t / 0.12;
+    } else if (t > 0.8) {
+      contentAlpha = 1 - (t - 0.8) / 0.2;
+    } else {
+      contentAlpha = 1;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = contentAlpha;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const w = WORLDS[currentWorld];
+
+    // World name - slides in from left
+    let worldNameX;
+    if (t < 0.15) {
+      worldNameX = W / 2 - (1 - t / 0.15) * W * 0.4;
+    } else {
+      worldNameX = W / 2;
+    }
+
+    ctx.font = '900 48px Orbitron';
+    ctx.fillStyle = '#FFD166';
+    ctx.shadowColor = '#FFD166';
+    ctx.shadowBlur = 30;
+    ctx.fillText(w.icon + ' ' + w.name.toUpperCase(), worldNameX, H / 2 - 30);
+    ctx.shadowBlur = 0;
+
+    // Gold separator line
+    const lineW = 200;
+    ctx.strokeStyle = `rgba(255, 209, 102, ${contentAlpha * 0.6})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - lineW / 2, H / 2 + 5);
+    ctx.lineTo(W / 2 + lineW / 2, H / 2 + 5);
+    ctx.stroke();
+
+    // Level number - slides in from right
+    let levelX;
+    if (t < 0.18) {
+      levelX = W / 2 + (1 - t / 0.18) * W * 0.4;
+    } else {
+      levelX = W / 2;
+    }
+
+    ctx.font = '400 28px Orbitron';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(255,255,255,0.3)';
+    ctx.shadowBlur = 10;
+    ctx.fillText('LEVEL ' + (currentLevel + 1), levelX, H / 2 + 40);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
   }
 
   function stopBgMusic() {
@@ -481,6 +739,7 @@ canvas {
   canvas.addEventListener('click', (e) => {
     if (touchDragging) { touchDragging = false; return; }
     initAudio();
+    startAmbient();
     const pos = mapClientToGame(e.clientX, e.clientY);
     const cx = pos.x, cy = pos.y;
 
@@ -756,7 +1015,6 @@ canvas {
     const cfg = getLevelConfig(levelIdx);
     const w = WORLDS[worldIdx];
 
-    state = 'playing';
     score = 0;
     combo = 1;
     lastCollectTime = 0;
@@ -775,25 +1033,33 @@ canvas {
     stars = [];
     traps = [];
     effects = [];
+    burstParticles = [];
+    fruitPopAnims = [];
     speedBoosts = [];
     speedBoostTimer = 0;
     tiltX = 0;
     tiltY = 0;
 
-    for (let i = 0; i < cfg.starCount; i++) {
-      spawnStar(cfg.movingStars && i >= cfg.starCount - 2);
-    }
-    for (let i = 0; i < cfg.trapCount; i++) {
-      spawnTrap(cfg.trapSpeed);
-    }
-    // Speed boost spawns on timer for all worlds
-    spawnSpeedBoost();
     spawnAmbientParticles(worldIdx);
 
-    gameStartTime = performance.now();
-    lastFrameTime = gameStartTime;
+    // Show level intro, then start actual gameplay
+    state = 'levelIntro';
+    showLevelIntro(w.name, levelIdx + 1, () => {
+      state = 'playing';
+      for (let i = 0; i < cfg.starCount; i++) {
+        spawnStar(cfg.movingStars && i >= cfg.starCount - 2);
+      }
+      for (let i = 0; i < cfg.trapCount; i++) {
+        spawnTrap(cfg.trapSpeed);
+      }
+      spawnSpeedBoost();
 
-    startBgMusic(worldIdx);
+      gameStartTime = performance.now();
+      lastFrameTime = gameStartTime;
+
+      startBgMusic(worldIdx);
+      startAmbient();
+    });
   }
 
   // ========== EFFECTS ==========
@@ -838,6 +1104,8 @@ canvas {
           }
         }
         saveProgress();
+        playLevelCompleteSound();
+        vibrateLevelComplete();
         state = 'levelComplete';
       } else {
         state = 'gameover';
@@ -866,10 +1134,10 @@ canvas {
     ball.y += ball.vy * dt;
 
     // Wall bounce
-    if (ball.x - BALL_RADIUS < 0) { ball.x = BALL_RADIUS; ball.vx = Math.abs(ball.vx) * BOUNCE_LOSS; }
-    if (ball.x + BALL_RADIUS > W) { ball.x = W - BALL_RADIUS; ball.vx = -Math.abs(ball.vx) * BOUNCE_LOSS; }
-    if (ball.y - BALL_RADIUS < 0) { ball.y = BALL_RADIUS; ball.vy = Math.abs(ball.vy) * BOUNCE_LOSS; }
-    if (ball.y + BALL_RADIUS > H) { ball.y = H - BALL_RADIUS; ball.vy = -Math.abs(ball.vy) * BOUNCE_LOSS; }
+    if (ball.x - BALL_RADIUS < 0) { ball.x = BALL_RADIUS; ball.vx = Math.abs(ball.vx) * BOUNCE_LOSS; if (Math.abs(ball.vx) > 10 || Math.abs(ball.vy) > 10) vibrateWallBounce(); }
+    if (ball.x + BALL_RADIUS > W) { ball.x = W - BALL_RADIUS; ball.vx = -Math.abs(ball.vx) * BOUNCE_LOSS; if (Math.abs(ball.vx) > 10 || Math.abs(ball.vy) > 10) vibrateWallBounce(); }
+    if (ball.y - BALL_RADIUS < 0) { ball.y = BALL_RADIUS; ball.vy = Math.abs(ball.vy) * BOUNCE_LOSS; if (Math.abs(ball.vx) > 10 || Math.abs(ball.vy) > 10) vibrateWallBounce(); }
+    if (ball.y + BALL_RADIUS > H) { ball.y = H - BALL_RADIUS; ball.vy = -Math.abs(ball.vy) * BOUNCE_LOSS; if (Math.abs(ball.vx) > 10 || Math.abs(ball.vy) > 10) vibrateWallBounce(); }
 
     // Trail
     const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
@@ -914,8 +1182,15 @@ canvas {
         const points = 10 * combo;
         score += points;
         playCollectSound(currentWorld);
+        playCollectSoundEnhanced(combo);
+        vibrateCollect();
         addCollectEffect(s.x, s.y, points);
-        if (combo >= 3) addComboPopup(combo);
+        spawnCollectionBurst(s.x, s.y);
+        addFruitPop(s.x, s.y, s.fruitType);
+        if (combo >= 3) {
+          addComboPopup(combo);
+          if (combo === 3 || combo === 5 || combo === 8) playComboSound(combo);
+        }
         stars.splice(i, 1);
         spawnStar(cfg.movingStars && Math.random() > 0.4);
       }
@@ -941,6 +1216,8 @@ canvas {
           screenShake = 0.3;
           screenRedFlash = 0.3;
           playTrapSound();
+          playTrapHitSound();
+          vibrateTrapHit();
           addTrapHitEffect(t.x, t.y);
           // Bounce ball away
           const angle = Math.atan2(dy, dx);
@@ -1004,6 +1281,23 @@ canvas {
       if (p.x > W + 10) p.x = -10;
       if (p.y < -10) p.y = H + 10;
       if (p.y > H + 10) p.y = -10;
+    }
+
+    // Update burst particles
+    for (let i = burstParticles.length - 1; i >= 0; i--) {
+      const bp = burstParticles[i];
+      bp.age += dt * 1000;
+      bp.x += bp.vx;
+      bp.y += bp.vy;
+      bp.vy += 0.1; // gravity
+      if (bp.age >= bp.lifetime) burstParticles.splice(i, 1);
+    }
+
+    // Update fruit pop animations
+    for (let i = fruitPopAnims.length - 1; i >= 0; i--) {
+      if (performance.now() - fruitPopAnims[i].startTime >= fruitPopAnims[i].duration) {
+        fruitPopAnims.splice(i, 1);
+      }
     }
 
     // Update effects
@@ -2722,6 +3016,32 @@ canvas {
     if (state === 'levelComplete') { drawLevelCompleteScreen(); return; }
     if (state === 'gameover') { drawGameOverScreen(); return; }
 
+    // Level intro animation
+    if (state === 'levelIntro') {
+      updateLevelIntro();
+      const w = WORLDS[currentWorld];
+      // Update ambient particles during intro
+      for (const p of ambientParticles) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.phase += dt * 2;
+        if (p.x < -10) p.x = W + 10;
+        if (p.x > W + 10) p.x = -10;
+        if (p.y < -10) p.y = H + 10;
+        if (p.y > H + 10) p.y = -10;
+      }
+      if (currentWorld === 0) {
+        drawJungleBackground();
+      } else {
+        ctx.fillStyle = w.bg;
+        ctx.fillRect(0, 0, W, H);
+        drawGrid(w.gridColor);
+      }
+      drawAmbientParticles(currentWorld);
+      drawLevelIntro();
+      return;
+    }
+
     // Playing
     update(dt);
 
@@ -2777,8 +3097,78 @@ canvas {
       ctx.globalAlpha = 1;
     }
 
+    // Speed lines (before ball)
+    const ballSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+    if (ballSpeed > 8) {
+      const lineCount = Math.floor(ballSpeed / 2);
+      for (let i = 0; i < lineCount; i++) {
+        const sAngle = Math.atan2(ball.vy, ball.vx) + Math.PI;
+        const spread = (Math.random() - 0.5) * 0.6;
+        const len = ballSpeed * (3 + Math.random() * 4);
+        const startDist = BALL_RADIUS + Math.random() * 5;
+
+        ctx.beginPath();
+        ctx.moveTo(
+          ball.x + Math.cos(sAngle + spread) * startDist,
+          ball.y + Math.sin(sAngle + spread) * startDist
+        );
+        ctx.lineTo(
+          ball.x + Math.cos(sAngle + spread) * (startDist + len),
+          ball.y + Math.sin(sAngle + spread) * (startDist + len)
+        );
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 + Math.random() * 0.2})`;
+        ctx.lineWidth = 0.5 + Math.random();
+        ctx.stroke();
+      }
+    }
+
     // Ball
     drawThemedBall(currentWorld);
+
+    // Fruit pop animations
+    for (const fp of fruitPopAnims) {
+      const elapsed = performance.now() - fp.startTime;
+      const t = elapsed / fp.duration;
+      let scale;
+      if (t < 0.3) {
+        scale = 1 + 0.4 * (t / 0.3); // scale up to 1.4
+      } else {
+        scale = 1.4 * (1 - (t - 0.3) / 0.7); // shrink to 0
+      }
+      if (scale > 0.01) {
+        ctx.save();
+        ctx.translate(fp.x, fp.y);
+        ctx.scale(scale, scale);
+        ctx.translate(-fp.x, -fp.y);
+        ctx.globalAlpha = Math.max(0, 1 - t);
+        drawThemedStar(fp.x, fp.y, STAR_RADIUS, currentWorld, 0, fp.fruitType);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+    }
+
+    // Burst particles
+    for (const bp of burstParticles) {
+      const lifeRatio = 1 - bp.age / bp.lifetime;
+      const size = bp.size * lifeRatio;
+      const alpha = lifeRatio;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      if (bp.isLeaf) {
+        // Leaf shape: small rotated rectangle in green shades
+        ctx.translate(bp.x, bp.y);
+        ctx.rotate(bp.rotation + bp.age * 0.005);
+        ctx.fillStyle = bp.color === '#06D6A0' ? '#06D6A0' : '#2d8b2d';
+        ctx.fillRect(-size / 2, -size / 4, size, size / 2);
+      } else {
+        // Sparkle shape: small circle in gold/white
+        ctx.fillStyle = bp.color;
+        ctx.beginPath();
+        ctx.arc(bp.x, bp.y, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     // Effects
     drawEffects();
