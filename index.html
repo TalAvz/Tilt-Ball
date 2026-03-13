@@ -380,6 +380,14 @@ canvas {
     tiltY = -(gamma / 45);
   }
 
+  function setupGyro() {
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.gamma !== null) hasGyro = true;
+      handleOrientation(e);
+    });
+    gyroPermGranted = true;
+  }
+
   function requestGyroPermission() {
     if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -387,16 +395,14 @@ canvas {
         if (response === 'granted') {
           gyroPermGranted = true;
           hasGyro = true;
+          localStorage.setItem('gyroPermission', 'granted');
           window.addEventListener('deviceorientation', handleOrientation);
         }
         state = 'title';
       }).catch(() => { state = 'title'; });
     } else {
-      window.addEventListener('deviceorientation', (e) => {
-        if (e.gamma !== null) hasGyro = true;
-        handleOrientation(e);
-      });
-      gyroPermGranted = true;
+      setupGyro();
+      localStorage.setItem('gyroPermission', 'granted');
       state = 'title';
     }
   }
@@ -2761,15 +2767,28 @@ canvas {
   lastFrameTime = performance.now();
   requestAnimationFrame(frame);
 
-  // Initial state check
+  // Initial state check — use cached permission to skip prompt
+  const cachedGyroPermission = localStorage.getItem('gyroPermission');
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
-    state = 'permission';
+    if (cachedGyroPermission === 'granted') {
+      // iOS device that already granted permission — re-request silently
+      DeviceOrientationEvent.requestPermission().then(response => {
+        if (response === 'granted') {
+          gyroPermGranted = true;
+          hasGyro = true;
+          window.addEventListener('deviceorientation', handleOrientation);
+        } else {
+          localStorage.removeItem('gyroPermission');
+        }
+      }).catch(() => { localStorage.removeItem('gyroPermission'); });
+      state = 'title';
+    } else {
+      state = 'permission';
+    }
   } else {
-    window.addEventListener('deviceorientation', (e) => {
-      if (e.gamma !== null) hasGyro = true;
-      handleOrientation(e);
-    });
+    setupGyro();
+    localStorage.setItem('gyroPermission', 'granted');
     state = 'title';
   }
 })();
