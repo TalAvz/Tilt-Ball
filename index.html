@@ -216,7 +216,10 @@ canvas {
 
   let progress = loadProgress();
 
-  console.log('gyroPermission in storage:', localStorage.getItem('gyroPermission'));
+  const fromStorage = localStorage.getItem('gyroPermission');
+  const fromCookie = document.cookie.includes('gyroPermission=granted');
+  const isGyroGranted = fromStorage === 'granted' || fromCookie;
+  console.log('gyroPermission in storage:', fromStorage, 'in cookie:', fromCookie);
 
   // ========== STATE ==========
   let W, H, dpr;
@@ -382,6 +385,12 @@ canvas {
     tiltY = -(gamma / 45);
   }
 
+  function saveGyroPermission() {
+    localStorage.setItem('gyroPermission', 'granted');
+    document.cookie = "gyroPermission=granted; max-age=31536000; path=/";
+    console.log('Saved gyroPermission as granted');
+  }
+
   function setupGyro() {
     window.addEventListener('deviceorientation', (e) => {
       if (e.gamma !== null) hasGyro = true;
@@ -397,16 +406,14 @@ canvas {
         if (response === 'granted') {
           gyroPermGranted = true;
           hasGyro = true;
-          localStorage.setItem('gyroPermission', 'granted');
-          console.log('Saved gyroPermission as granted');
+          saveGyroPermission();
           window.addEventListener('deviceorientation', handleOrientation);
         }
         state = 'title';
       }).catch(() => { state = 'title'; });
     } else {
       setupGyro();
-      localStorage.setItem('gyroPermission', 'granted');
-      console.log('Saved gyroPermission as granted');
+      saveGyroPermission();
       state = 'title';
     }
   }
@@ -2772,8 +2779,7 @@ canvas {
   requestAnimationFrame(frame);
 
   // Initial state check — use cached permission to skip prompt
-  const cachedGyroPermission = localStorage.getItem('gyroPermission');
-  if (cachedGyroPermission === 'granted') {
+  if (isGyroGranted) {
     // Permission was previously granted — just listen, never call requestPermission()
     setupGyro();
     state = 'title';
@@ -2784,8 +2790,7 @@ canvas {
   } else {
     // Non-iOS — no permission needed, auto-grant
     setupGyro();
-    localStorage.setItem('gyroPermission', 'granted');
-    console.log('Saved gyroPermission as granted');
+    saveGyroPermission();
     state = 'title';
   }
 })();
