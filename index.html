@@ -65,18 +65,6 @@ canvas {
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="gyro-debug" style="
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.7);
-  color: #06D6A0;
-  font-size: 12px;
-  padding: 4px 8px;
-  z-index: 9999;
-  font-family: monospace;
-"></div>
 <script>
 (() => {
   const canvas = document.getElementById('c');
@@ -406,9 +394,7 @@ canvas {
   function setupGyro() {
     console.log('setupGyro() called');
     window.addEventListener('deviceorientation', (e) => {
-      console.log('gyro event firing', e.gamma, e.beta);
       if (e.gamma !== null) hasGyro = true;
-      document.getElementById('gyro-debug').textContent = `gamma:${e.gamma?.toFixed(1)} beta:${e.beta?.toFixed(1)} hasGyro:${hasGyro}`;
       handleOrientation(e);
     });
     gyroPermGranted = true;
@@ -417,9 +403,14 @@ canvas {
   // Must be called from a user gesture (tap) so iOS delivers non-zero gyro values
   function activateGyro() {
     if (gyroPermGranted) return; // already activated
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
+    if (isGyroGranted) {
+      // Cached permission — just attach the listener, skip requestPermission()
+      // to avoid iOS showing the permission dialog again
+      setupGyro();
+      hasGyro = true;
+    } else if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS: silently re-request (no UI shown since iOS remembers the grant)
+      // iOS, first time — must request permission
       DeviceOrientationEvent.requestPermission().then(response => {
         if (response === 'granted') {
           setupGyro();
@@ -872,10 +863,6 @@ canvas {
     ball.vy *= Math.pow(friction, dt * 60);
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
-
-    // Update debug overlay with ball velocity
-    const dbg = document.getElementById('gyro-debug');
-    if (dbg) dbg.textContent += ` vx:${ball.vx.toFixed(1)} vy:${ball.vy.toFixed(1)}`;
 
     // Wall bounce
     if (ball.x - BALL_RADIUS < 0) { ball.x = BALL_RADIUS; ball.vx = Math.abs(ball.vx) * BOUNCE_LOSS; }
