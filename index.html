@@ -65,6 +65,18 @@ canvas {
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="gyro-debug" style="
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.7);
+  color: #06D6A0;
+  font-size: 12px;
+  padding: 4px 8px;
+  z-index: 9999;
+  font-family: monospace;
+"></div>
 <script>
 (() => {
   const canvas = document.getElementById('c');
@@ -396,6 +408,7 @@ canvas {
     window.addEventListener('deviceorientation', (e) => {
       console.log('gyro event firing', e.gamma, e.beta);
       if (e.gamma !== null) hasGyro = true;
+      document.getElementById('gyro-debug').textContent = `gamma:${e.gamma?.toFixed(1)} beta:${e.beta?.toFixed(1)} hasGyro:${hasGyro}`;
       handleOrientation(e);
     });
     gyroPermGranted = true;
@@ -839,6 +852,10 @@ canvas {
     ball.vy *= Math.pow(friction, dt * 60);
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
+
+    // Update debug overlay with ball velocity
+    const dbg = document.getElementById('gyro-debug');
+    if (dbg) dbg.textContent += ` vx:${ball.vx.toFixed(1)} vy:${ball.vy.toFixed(1)}`;
 
     // Wall bounce
     if (ball.x - BALL_RADIUS < 0) { ball.x = BALL_RADIUS; ball.vx = Math.abs(ball.vx) * BOUNCE_LOSS; }
