@@ -401,25 +401,26 @@ canvas {
   }
 
   // Must be called from a user gesture (tap) so iOS delivers non-zero gyro values
-  function activateGyro() {
+  async function activateGyro() {
     if (gyroPermGranted) return; // already activated
-    if (isGyroGranted) {
-      // Cached permission — just attach the listener, skip requestPermission()
-      // to avoid iOS showing the permission dialog again
-      setupGyro();
-      hasGyro = true;
-    } else if (typeof DeviceOrientationEvent !== 'undefined' &&
+
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
         typeof DeviceOrientationEvent.requestPermission === 'function') {
-      // iOS, first time — must request permission
-      DeviceOrientationEvent.requestPermission().then(response => {
+      // iOS — always call requestPermission() from a user gesture
+      // First time: shows dialog
+      // After that: returns 'granted' silently, no dialog
+      try {
+        const response = await DeviceOrientationEvent.requestPermission();
         if (response === 'granted') {
-          setupGyro();
-          hasGyro = true;
           saveGyroPermission();
+          setupGyro();
         }
-      }).catch(() => {});
+      } catch (e) {
+        console.log('Gyro permission error:', e);
+      }
     } else {
-      // Non-iOS: just attach the listener
+      // Non-iOS
+      saveGyroPermission();
       setupGyro();
     }
   }
