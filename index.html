@@ -216,6 +216,8 @@ canvas {
 
   let progress = loadProgress();
 
+  console.log('gyroPermission in storage:', localStorage.getItem('gyroPermission'));
+
   // ========== STATE ==========
   let W, H, dpr;
   // states: permission, title, worldSelect, levelSelect, playing, levelComplete, gameover
@@ -396,6 +398,7 @@ canvas {
           gyroPermGranted = true;
           hasGyro = true;
           localStorage.setItem('gyroPermission', 'granted');
+          console.log('Saved gyroPermission as granted');
           window.addEventListener('deviceorientation', handleOrientation);
         }
         state = 'title';
@@ -403,6 +406,7 @@ canvas {
     } else {
       setupGyro();
       localStorage.setItem('gyroPermission', 'granted');
+      console.log('Saved gyroPermission as granted');
       state = 'title';
     }
   }
@@ -2781,6 +2785,7 @@ canvas {
     // Non-iOS — no permission needed, auto-grant
     setupGyro();
     localStorage.setItem('gyroPermission', 'granted');
+    console.log('Saved gyroPermission as granted');
     state = 'title';
   }
 })();
